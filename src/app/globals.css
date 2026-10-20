@@ -1,0 +1,353 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+
+  /* GS Digital brand tokens — see branding.md */
+  --gs-red: #e63e31;
+  --gs-black: #000000;
+  --gs-gray: #7a797c;
+  --gs-light: #f4f5f8;
+  /* App sidebar — near-black, a touch warmer than pure black so the red mark and white text sit softly. */
+  --gs-sidebar: #17181c;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-gs-red: var(--gs-red);
+  --color-gs-black: var(--gs-black);
+  --color-gs-gray: var(--gs-gray);
+  --color-gs-light: var(--gs-light);
+  --color-gs-sidebar: var(--gs-sidebar);
+
+  /* Modern surface scale — softer, larger corners and layered, low-contrast shadows. Overriding the
+     theme tokens re-skins every rounded and shadow utility already used across the app. */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --shadow-sm: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
+  --shadow-md: 0 6px 16px -4px rgb(16 24 40 / 0.1), 0 2px 6px -2px rgb(16 24 40 / 0.06);
+  --shadow-lg: 0 20px 40px -12px rgb(16 24 40 / 0.22), 0 6px 12px -6px rgb(16 24 40 / 0.1);
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.01em;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Shared component styles — ONE definition of fields and buttons for the whole app.
+   Utilities (w-full, mt-2, self-start…) still layer on top for layout; only the look lives here.
+   Fields:  .field (40px)  /  .field .field-sm (36px, compact tables and inline editors)
+   Buttons: .btn + one of .btn-primary | .btn-secondary | .btn-dark | .btn-danger, optional .btn-sm
+   --------------------------------------------------------------------------------------------- */
+@layer components {
+  .field {
+    min-height: 2.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--gs-gray) 40%, transparent);
+    background-color: #fff;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--gs-black);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .field::placeholder {
+    color: color-mix(in srgb, var(--gs-gray) 80%, transparent);
+  }
+  .field:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--gs-gray) 70%, transparent);
+  }
+  .field:focus,
+  .field:focus-visible {
+    outline: none;
+    border-color: var(--gs-red);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--gs-red) 16%, transparent);
+  }
+  .field:disabled {
+    background-color: var(--gs-light);
+    color: var(--gs-gray);
+    cursor: not-allowed;
+  }
+  .field[aria-invalid="true"] {
+    border-color: var(--gs-red);
+  }
+  .field-sm {
+    min-height: 2.25rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Page containers. Every page fills the shell's wide content box (see AppShell); form and
+     settings pages add one of these to their root so each direct child keeps a readable
+     measure instead of stretching across a 1600px monitor. Data pages (lists, boards,
+     reports) use no class and run the full width. */
+  .page-sm {
+    --measure: 40rem;
+  }
+  .page-md {
+    --measure: 56rem;
+  }
+  .page-lg {
+    --measure: 72rem;
+  }
+  :where(.page-sm, .page-md, .page-lg) > * {
+    max-width: var(--measure);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+    padding: 0 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    white-space: nowrap;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease,
+      opacity 150ms ease,
+      box-shadow 150ms ease,
+      transform 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .btn-sm {
+    min-height: 2.25rem;
+    padding: 0 0.75rem;
+    font-size: 0.8125rem;
+  }
+  .btn-primary {
+    background-color: var(--gs-red);
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(230 62 49 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.18);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--gs-red) 88%, black);
+  }
+  .btn-secondary {
+    background-color: #fff;
+    border-color: color-mix(in srgb, var(--gs-gray) 40%, transparent);
+    color: var(--gs-black);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--gs-light);
+    border-color: color-mix(in srgb, var(--gs-gray) 60%, transparent);
+  }
+  .btn-dark {
+    background-color: var(--gs-black);
+    color: #fff;
+  }
+  .btn-dark:hover:not(:disabled) {
+    background-color: #2a2b2f;
+  }
+  .btn-danger {
+    background-color: #fff;
+    border-color: var(--gs-red);
+    color: var(--gs-red);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--gs-red) 7%, white);
+  }
+}
+
+@layer base {
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--gs-red);
+  }
+
+  /* Tailwind v4's reset leaves buttons with the default arrow cursor. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  label:has(input[type="checkbox"]),
+  label:has(input[type="radio"]),
+  input[type="file"]::file-selector-button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  /* One visible keyboard focus style everywhere; mouse clicks don't trigger it. */
+  :focus-visible {
+    outline: 2px solid var(--gs-red);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline-offset: 0;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--gs-red) 22%, transparent);
+  }
+
+  /* Tables: a quiet row hover and a steadier header so dense lists are easier to scan. */
+  table thead th {
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  table tbody tr {
+    transition: background-color 120ms ease;
+  }
+  table tbody tr:hover {
+    background-color: color-mix(in srgb, var(--gs-light) 60%, transparent);
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.toast-in {
+  animation: toast-in 180ms ease-out;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Motion. Every interactive element eases between states instead of snapping, buttons give a
+   tiny press-down on click, pages fade in on navigation and view switches cross-fade. All of it
+   is switched off by the prefers-reduced-motion rule at the bottom of this file.
+   --------------------------------------------------------------------------------------------- */
+@layer base {
+  a,
+  button,
+  summary,
+  input,
+  select,
+  textarea,
+  [role="button"],
+  [role="menuitem"],
+  tbody tr {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform, translate, scale, rotate, text-decoration-color;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Press feedback — only on things that look like buttons. */
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active,
+  .btn:not(:disabled):not([aria-disabled="true"]):active {
+    transform: scale(0.97);
+  }
+}
+
+/* Only "from" is declared, so once finished the element has no transform left behind (a lingering
+   transform would trap position:fixed children like the task drawer). */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+#main-content > div > * {
+  animation: page-in 240ms ease-out backwards;
+}
+.view-enter {
+  animation: view-in 200ms ease-out backwards;
+}
+
+/* Overlays and panels. Enter animations only declare "from", so nothing (no transform) is left
+   behind afterwards. Toasts also get an exit so they slide away instead of vanishing. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+}
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateX(18px) scale(0.98);
+  }
+}
+.anim-fade-in {
+  animation: fade-in 200ms ease-out backwards;
+}
+.anim-slide-right {
+  animation: slide-in-right 280ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.anim-pop {
+  animation: pop-in 180ms ease-out backwards;
+}
+.toast-out {
+  animation: toast-out 200ms ease-in forwards;
+}
+/* Confirmation panels ("Permanently delete…?") pop in; expanders fade their content open. */
+[role="alertdialog"] {
+  animation: pop-in 180ms ease-out backwards;
+}
+details[open] > :not(summary) {
+  animation: view-in 200ms ease-out backwards;
+}
+html {
+  scroll-behavior: smooth;
+}
+
+/* Whatever follows a page banner sits a consistent distance below it, whatever margin the page
+   used before (mt-4 / mt-6 / none). Unlayered on purpose so it beats the page's own utilities. */
+.page-header + * {
+  margin-top: 1.5rem;
+}
+/* A breadcrumb line directly above a page header gets a little air. */
+p + .page-header {
+  margin-top: 0.625rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
