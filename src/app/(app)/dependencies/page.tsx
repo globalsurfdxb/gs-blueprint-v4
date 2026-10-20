@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getLocalDateString } from "@/lib/timezone";
 import { dueRange, loadActiveTrackerRows, deriveTrackerStats } from "@/lib/dependency-data";
-import { PageHeader } from "@/components/page-header";
+import { DashboardHero, EmptyState, HeroPill, SectionCard, StatCard } from "@/components/dashboard-ui";
 
 /**
  * Dependency Tracker Dashboard (PRD 8.13, v1.28) — the coordinator's landing screen on login.
@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/page-header";
  * deep-links into the Dependency Tracker list (or the Projects tab) with the matching filter
  * pre-applied. All figures are computed from the coordinator's full visible universe — every
  * non-completed cross-department task on their tracked projects (department-membership rule).
+ * Styled like the Admin dashboard: greeting banner, icon KPI tiles, section cards.
  */
 export default async function DependencyDashboardPage() {
   const user = await getCurrentUser();
@@ -27,61 +28,77 @@ export default async function DependencyDashboardPage() {
   ]);
 
   const stats = deriveTrackerStats(rows, weekRange);
-
-  const tile = "flex flex-col rounded-xl border border-gs-gray/15 bg-white px-5 py-4 text-left transition hover:border-gs-red/40 hover:shadow-sm";
+  const attention = stats.overdue + stats.stuck;
 
   return (
     <div>
-      <PageHeader
-        title="Dashboard"
-        description={<>
-At-a-glance status of the cross-department work you coordinate. Select any figure to drill in.
-</>}
-        actions={<>
-          <Link href="/dependencies/tracker" className="text-sm font-medium text-gs-red hover:underline">Open Dependency Tracker →</Link>
-        </>}
+      <DashboardHero
+        location={user.location}
+        name={user.name}
+        scopeLabel={`${projectCount} ${projectCount === 1 ? "project" : "projects"} tracked`}
+        action={{ href: "/dependencies/tracker", label: "Open Dependency Tracker" }}
+        pills={
+          attention === 0 ? (
+            <HeroPill tone="ok">All clear — nothing overdue or stuck</HeroPill>
+          ) : (
+            <>
+              {stats.overdue > 0 && (
+                <HeroPill tone="danger">
+                  {stats.overdue} overdue {stats.overdue === 1 ? "task" : "tasks"}
+                </HeroPill>
+              )}
+              {stats.stuck > 0 && <HeroPill tone="warn">{stats.stuck} stuck</HeroPill>}
+            </>
+          )
+        }
       />
 
-      <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <Link href="/dependencies/projects" className={tile}>
-          <span className="text-3xl font-semibold">{projectCount}</span>
-          <span className="mt-1 text-xs uppercase tracking-wide text-gs-gray">Projects Tracked</span>
-        </Link>
-
-        <Link href="/dependencies/tracker?due=week" className={tile}>
-          <span className="text-3xl font-semibold">{stats.dueThisWeek}</span>
-          <span className="mt-1 text-xs uppercase tracking-wide text-gs-gray">Due This Week</span>
-        </Link>
-
-        <Link href="/dependencies/tracker?overdue=1" className={tile}>
-          <span className={`text-3xl font-semibold ${stats.overdue > 0 ? "text-gs-red" : ""}`}>{stats.overdue}</span>
-          <span className="mt-1 text-xs uppercase tracking-wide text-gs-gray">Overdue</span>
-        </Link>
-
-        <Link href="/dependencies/tracker?stuck=1" className={tile}>
-          <span className={`text-3xl font-semibold ${stats.stuck > 0 ? "text-amber-600" : ""}`}>{stats.stuck}</span>
-          <span className="mt-1 text-xs uppercase tracking-wide text-gs-gray">Stuck</span>
-        </Link>
-
-        <div className={`${tile} hover:border-gs-gray/15 hover:shadow-none`}>
-          <span className="text-xs uppercase tracking-wide text-gs-gray">By Discipline</span>
-          {stats.byDiscipline.length === 0 ? (
-            <span className="mt-2 text-sm text-gs-gray">—</span>
-          ) : (
-            <div className="mt-2 flex flex-col gap-1">
-              {stats.byDiscipline.map((d) => (
-                <Link
-                  key={d.discipline}
-                  href={`/dependencies/tracker?discipline=${encodeURIComponent(d.discipline)}`}
-                  className="flex items-center justify-between text-sm hover:text-gs-red"
-                >
-                  <span className="truncate">{d.discipline}</span>
-                  <span className="ml-2 font-semibold">{d.count}</span>
-                </Link>
-              ))}
-            </div>
-          )}
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold text-gs-black">Needs attention</h2>
+        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            icon="alert"
+            attention
+            label="Overdue"
+            value={stats.overdue}
+            tone={stats.overdue > 0 ? "danger" : "default"}
+            href="/dependencies/tracker?overdue=1"
+          />
+          <StatCard
+            icon="hourglass"
+            attention
+            label="Stuck"
+            value={stats.stuck}
+            tone={stats.stuck > 0 ? "warn" : "default"}
+            href="/dependencies/tracker?stuck=1"
+          />
+          <StatCard icon="calendar" label="Due This Week" value={stats.dueThisWeek} href="/dependencies/tracker?due=week" />
+          <StatCard icon="list" label="Projects Tracked" value={projectCount} href="/dependencies/projects" />
         </div>
+      </section>
+
+      <div className="mt-8">
+        <SectionCard title="By Discipline" count={stats.byDiscipline.length}>
+          {stats.byDiscipline.length === 0 ? (
+            <EmptyState text="No open cross-department tasks on your tracked projects." />
+          ) : (
+            <ul>
+              {stats.byDiscipline.map((d) => (
+                <li key={d.discipline} className="border-t border-gs-gray/10 first:border-t-0">
+                  <Link
+                    href={`/dependencies/tracker?discipline=${encodeURIComponent(d.discipline)}`}
+                    className="flex items-center justify-between px-4 py-3 text-sm transition-colors hover:bg-gs-light/60"
+                  >
+                    <span className="font-medium">{d.discipline}</span>
+                    <span className="rounded-full bg-gs-light px-2.5 py-0.5 text-xs font-semibold tabular-nums text-gs-gray">
+                      {d.count}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
       </div>
     </div>
   );

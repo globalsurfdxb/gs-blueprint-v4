@@ -9,116 +9,9 @@ import { canViewDashboard, hasPersonalTaskList, isLead } from "@/lib/permissions
 import { formatDuration } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { statusLabel } from "@/lib/bug";
+import { DashboardHero, EmptyState, HeroPill, SectionCard, StatCard } from "@/components/dashboard-ui";
 
-// Stroke icons for the KPI tiles (24px grid). Decorative — the label carries the meaning.
-const TILE_ICONS = {
-  alert: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5M12 16h.01" />
-    </>
-  ),
-  revision: (
-    <>
-      <path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" />
-      <path d="M3 21v-5h5M3 12A9 9 0 0 1 18.5 5.8L21 8" />
-      <path d="M21 3v5h-5" />
-    </>
-  ),
-  clock: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </>
-  ),
-  hourglass: <path d="M6 3h12M6 21h12M7 3v4l5 5-5 5v4M17 3v4l-5 5 5 5v4" />,
-  flag: <path d="M5 21V4M5 4h11l-2 4 2 4H5" />,
-  list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
-  check: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M8 12l3 3 5-6" />
-    </>
-  ),
-  calendar: (
-    <>
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M16 3v4M8 3v4M3 11h18" />
-    </>
-  ),
-  timer: (
-    <>
-      <circle cx="12" cy="13" r="8" />
-      <path d="M12 9v4l2 2M9 2h6" />
-    </>
-  ),
-} as const;
 
-type TileIcon = keyof typeof TILE_ICONS;
-
-function StatCard({
-  label,
-  value,
-  tone = "default",
-  href,
-  icon,
-  attention,
-}: {
-  label: string;
-  value: number;
-  tone?: "default" | "warn" | "danger";
-  href?: string;
-  icon?: TileIcon;
-  /** Shows a short status caption under the number — for the "needs attention" tiles. */
-  attention?: boolean;
-}) {
-  const valueColor = tone === "danger" ? "text-gs-red" : tone === "warn" ? "text-amber-600" : "text-gs-black";
-  // Tone shows up as a tinted icon chip, a soft corner glow and a caption — only when the number
-  // needs attention, so a calm dashboard stays calm.
-  const chip =
-    tone === "danger"
-      ? "bg-gs-red text-white shadow-[0_4px_10px_-2px_rgba(230,62,49,0.55)]"
-      : tone === "warn"
-        ? "bg-amber-500 text-white shadow-[0_4px_10px_-2px_rgba(245,158,11,0.55)]"
-        : "bg-gs-light text-gs-gray";
-  const glow = tone === "danger" ? "bg-gs-red/15" : tone === "warn" ? "bg-amber-400/20" : "";
-  const caption =
-    tone === "danger" ? "Needs action" : tone === "warn" ? "Keep an eye on it" : attention ? "All clear" : null;
-  const captionColor = tone === "danger" ? "text-gs-red" : tone === "warn" ? "text-amber-600" : "text-green-600";
-  const body = (
-    <>
-      {glow && <span aria-hidden className={`pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl ${glow}`} />}
-      <div className="relative flex items-start justify-between gap-2">
-        <p className="text-[13px] font-medium leading-snug text-gs-gray">{label}</p>
-        {icon && (
-          <span aria-hidden className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${chip}`}>
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-[18px] w-[18px]"
-            >
-              {TILE_ICONS[icon]}
-            </svg>
-          </span>
-        )}
-      </div>
-      <p className={`relative mt-4 font-heading text-4xl font-bold tracking-tight tabular-nums ${valueColor}`}>{value}</p>
-      {caption && <p className={`relative mt-1 text-xs font-medium ${captionColor}`}>{caption}</p>}
-    </>
-  );
-  const cls = "relative block overflow-hidden rounded-xl border border-gs-gray/10 bg-white p-5 shadow-sm";
-  return href ? (
-    <Link href={href} className={`${cls} transition duration-150 hover:-translate-y-0.5 hover:shadow-md`}>
-      {body}
-    </Link>
-  ) : (
-    <div className={cls}>{body}</div>
-  );
-}
 
 function TaskRows({ tasks, emptyText }: { tasks: DashTask[]; emptyText: string }) {
   if (tasks.length === 0) return <EmptyState text={emptyText} />;
@@ -178,73 +71,8 @@ function ShareBar({ good, bad }: { good: number; bad: number }) {
   );
 }
 
-function SectionCard({
-  title,
-  count,
-  className = "",
-  children,
-}: {
-  title: string;
-  /** Item count badge beside the title; red when > 0 so a non-empty problem list stands out. */
-  count?: number;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className={`overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm ${className}`}>
-      <h2 className="flex items-center gap-2 border-b border-gs-gray/10 px-4 py-3.5 text-[15px] font-semibold">
-        {title}
-        {count !== undefined && (
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
-              count > 0 ? "bg-gs-red/10 text-gs-red" : "bg-gs-light text-gs-gray"
-            }`}
-          >
-            {count}
-          </span>
-        )}
-      </h2>
-      {children}
-    </section>
-  );
-}
 
-/** Friendly empty state for a widget with nothing to show. */
-function EmptyState({ text }: { text: string }) {
-  return (
-    <p className="flex items-center gap-2 px-4 py-5 text-sm text-gs-gray">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-        className="h-4 w-4 shrink-0 text-green-600"
-      >
-        <circle cx="12" cy="12" r="9" />
-        <path d="M8 12l3 3 5-6" />
-      </svg>
-      {text}
-    </p>
-  );
-}
 
-/** Time-of-day greeting in the viewer's own timezone (Dubai or India), plus a long date. */
-function greetingFor(location: string): { greeting: string; dateLabel: string } {
-  const timeZone = location === "INDIA" ? "Asia/Kolkata" : "Asia/Dubai";
-  const now = new Date();
-  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone }).format(now)) % 24;
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const dateLabel = new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone,
-  }).format(now);
-  return { greeting, dateLabel };
-}
 
 /**
  * Sprint Progress (PRD 8.14) — completion %, per-person workload (open tasks + hours logged),
@@ -335,7 +163,15 @@ function SprintProgressSection({ data }: { data: SprintProgressData }) {
   );
 }
 
-function LeadDashboard({ data, sprintProgress }: { data: LeadDashboardData; sprintProgress: SprintProgressData }) {
+function LeadDashboard({
+  data,
+  sprintProgress,
+  user,
+}: {
+  data: LeadDashboardData;
+  sprintProgress: SprintProgressData;
+  user: { name: string; location: string };
+}) {
   if (!data.hasGroups) {
     return (
       <div className="page-md">
@@ -350,28 +186,50 @@ function LeadDashboard({ data, sprintProgress }: { data: LeadDashboardData; spri
     );
   }
 
+  const overdueN = data.overdueTasks.length;
+  const needsAction = data.reviewCount + data.unassignedCount + overdueN + data.flaggedCount;
+
   return (
     <div>
-      <PageHeader
-        title="My Team"
-        actions={<>
-          <span className="text-sm text-gs-gray">Across every group you lead</span>
-        </>}
+      <DashboardHero
+        location={user.location}
+        name={user.name}
+        scopeLabel="Across every group you lead"
+        action={{ href: "/my-reviews", label: "Open My Reviews" }}
+        pills={
+          needsAction === 0 ? (
+            <HeroPill tone="ok">All clear — nothing waiting on you</HeroPill>
+          ) : (
+            <>
+              {data.reviewCount > 0 && <HeroPill tone="warn">{data.reviewCount} awaiting your review</HeroPill>}
+              {data.unassignedCount > 0 && <HeroPill tone="danger">{data.unassignedCount} unassigned</HeroPill>}
+              {overdueN > 0 && (
+                <HeroPill tone="danger">
+                  {overdueN} overdue {overdueN === 1 ? "task" : "tasks"}
+                </HeroPill>
+              )}
+              {data.flaggedCount > 0 && <HeroPill tone="warn">{data.flaggedCount} revision-flagged</HeroPill>}
+            </>
+          )
+        }
       />
 
-      {/* KPI row — the "what needs me" glance. Review/unassigned link into My Reviews, the
-          Lead's action queue, rather than duplicating that list here. */}
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Awaiting My Review" value={data.reviewCount} tone={data.reviewCount > 0 ? "warn" : "default"} href="/my-reviews" />
-        <StatCard label="Unassigned" value={data.unassignedCount} tone={data.unassignedCount > 0 ? "danger" : "default"} href="/my-reviews?view=unassigned" />
-        <StatCard label="Overdue" value={data.overdueTasks.length} tone={data.overdueTasks.length > 0 ? "danger" : "default"} href="/my-reviews?view=overdue" />
-        <StatCard label="Revision-Flagged" value={data.flaggedCount} tone={data.flaggedCount > 0 ? "danger" : "default"} href="/my-reviews?view=flagged" />
-      </div>
+      {/* KPI row — the "what needs me" glance. Each tile opens the matching filtered list in My
+          Reviews rather than duplicating that list here. */}
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold text-gs-black">Needs attention</h2>
+        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard icon="clock" attention label="Awaiting My Review" value={data.reviewCount} tone={data.reviewCount > 0 ? "warn" : "default"} href="/my-reviews" />
+          <StatCard icon="list" attention label="Unassigned" value={data.unassignedCount} tone={data.unassignedCount > 0 ? "danger" : "default"} href="/my-reviews?view=unassigned" />
+          <StatCard icon="alert" attention label="Overdue" value={overdueN} tone={overdueN > 0 ? "danger" : "default"} href="/my-reviews?view=overdue" />
+          <StatCard icon="revision" attention label="Revision-Flagged" value={data.flaggedCount} tone={data.flaggedCount > 0 ? "danger" : "default"} href="/my-reviews?view=flagged" />
+        </div>
+      </section>
 
-      <div className="mt-8 flex flex-col gap-8">
-        <SectionCard title="Team Workload">
+      <div className="mt-8 grid items-start gap-6 xl:grid-cols-2">
+        <SectionCard title="Team Workload" count={data.team.length} className="xl:col-span-2">
           {data.team.length === 0 ? (
-            <p className="px-4 py-4 text-sm text-gs-gray">No team members found for your pod.</p>
+            <EmptyState text="No team members found for your pod." />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[420px] text-sm">
@@ -400,13 +258,14 @@ function LeadDashboard({ data, sprintProgress }: { data: LeadDashboardData; spri
           )}
         </SectionCard>
 
-        <SectionCard title="Overdue Tasks">
+        <SectionCard title="Overdue Tasks" count={overdueN} className="xl:col-span-2">
           <TaskRows tasks={data.overdueTasks} emptyText="Nothing overdue in your groups." />
         </SectionCard>
 
-        <SectionCard title="Tasks With Revisions">
+        {/* Revision-count highlighting: 1 = amber (normal), 2+ = red (flagged), same as the admin view. */}
+        <SectionCard title="Tasks With Revisions" count={data.revisionTasks.length} className="xl:col-span-2">
           {data.revisionTasks.length === 0 ? (
-            <p className="px-4 py-4 text-sm text-gs-gray">No tasks in revision.</p>
+            <EmptyState text="No tasks in revision." />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-sm">
@@ -447,10 +306,12 @@ function LeadDashboard({ data, sprintProgress }: { data: LeadDashboardData; spri
           )}
         </SectionCard>
 
-        <SectionCard title="Bottlenecks — Stuck 3+ Days">
+        <SectionCard title="Bottlenecks — Stuck 3+ Days" count={data.bottlenecks.length} className="xl:col-span-2">
           <TaskRows tasks={data.bottlenecks} emptyText="Nothing stuck in progress or review." />
         </SectionCard>
+      </div>
 
+      <div className="mt-8">
         <SprintProgressSection data={sprintProgress} />
       </div>
     </div>
@@ -469,7 +330,7 @@ export default async function DashboardPage() {
         getLeadDashboardData(user),
         getSprintProgressData(user),
       ]);
-      return <LeadDashboard data={leadData} sprintProgress={sprintProgress} />;
+      return <LeadDashboard data={leadData} sprintProgress={sprintProgress} user={user} />;
     }
     // A view-only Dependency Tracker (PRD 8.13) has no task list of their own — their home is
     // the dependency queue. Only redirect there if they actually hold a designation.
@@ -481,8 +342,6 @@ export default async function DashboardPage() {
 
   const [data, sprintProgress] = await Promise.all([getDashboardData(user), getSprintProgressData(user)]);
 
-  const { greeting, dateLabel } = greetingFor(user.location);
-  const firstName = user.name.split(" ")[0];
   // Due Today / Running Timers only render when non-empty; the on-track card spans the full row
   // when it has no neighbour so the grid never leaves a hole.
   const hasSideCards = data.dueTodayTasks.length > 0 || data.runningTimers.length > 0;
@@ -493,54 +352,22 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1d1e24] via-[#23252c] to-[#2e1c1f] p-6 text-white shadow-lg md:p-8">
-        {/* Brand glow + faint grid — decorative only. */}
-        <div aria-hidden className="pointer-events-none absolute -right-24 -top-32 h-96 w-96 rounded-full bg-gs-red/30 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-40 left-1/3 h-72 w-72 rounded-full bg-[#ff7a59]/10 blur-3xl" />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:linear-gradient(to_right,white_1px,transparent_1px),linear-gradient(to_bottom,white_1px,transparent_1px)] [background-size:36px_36px] [mask-image:linear-gradient(to_bottom_right,black,transparent_70%)]"
-        />
-        <div className="relative flex flex-wrap items-end justify-between gap-x-8 gap-y-6">
-          <div>
-            <p className="text-sm font-medium text-white/60">{dateLabel}</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">
-              {greeting}, {firstName}
-            </h1>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {allClear ? (
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm ring-1 ring-white/15">
-                  <span aria-hidden className="h-2 w-2 rounded-full bg-green-400" />
-                  All clear — nothing overdue or due today
-                </span>
-              ) : (
-                <>
-                  {overdueN > 0 && (
-                    <span className="inline-flex items-center gap-2 rounded-full bg-gs-red/20 px-3 py-1 text-sm ring-1 ring-gs-red/40">
-                      <span aria-hidden className="h-2 w-2 rounded-full bg-gs-red" />
-                      {overdueN} overdue {overdueN === 1 ? "task" : "tasks"}
-                    </span>
-                  )}
-                  {dueTodayN > 0 && (
-                    <span className="inline-flex items-center gap-2 rounded-full bg-amber-400/15 px-3 py-1 text-sm ring-1 ring-amber-300/30">
-                      <span aria-hidden className="h-2 w-2 rounded-full bg-amber-400" />
-                      {dueTodayN} due today
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/80 ring-1 ring-white/15">
-              {data.scopeLabel}
-            </span>
-            <Link href="/projects" className="btn bg-white text-gs-black shadow-sm hover:bg-white/90">
-              View projects
-            </Link>
-          </div>
-        </div>
-      </section>
+      <DashboardHero
+        location={user.location}
+        name={user.name}
+        scopeLabel={data.scopeLabel}
+        action={{ href: "/projects", label: "View projects" }}
+        pills={
+          allClear ? (
+            <HeroPill tone="ok">All clear — nothing overdue or due today</HeroPill>
+          ) : (
+            <>
+              {overdueN > 0 && <HeroPill tone="danger">{overdueN} overdue {overdueN === 1 ? "task" : "tasks"}</HeroPill>}
+              {dueTodayN > 0 && <HeroPill tone="warn">{dueTodayN} due today</HeroPill>}
+            </>
+          )
+        }
+      />
 
       {/* Glanceable KPI groups — big Space Grotesk numbers, the "what needs attention" summary
           a Cluster Head or Admin pulls up between meetings (PRD 8.8, 9.4). On wide screens the two
