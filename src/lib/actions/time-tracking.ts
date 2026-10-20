@@ -6,41 +6,40 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canLogTime, canEditTimeLog } from "@/lib/permissions";
 import { localInputToUtc } from "@/lib/timezone";
+import { runAction } from "@/lib/run-action";
+import { logBugStatusEvent, revalidateTaskSurfaces, startTimerFor } from "@/lib/task-activity";
 
 export async function startTimer(projectId: string, taskId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+  if (!user) throw new Error("Your session has expired. Please sign in again.");
 
   const task = await prisma.task.findUnique({ where: { id: taskId } });
-  if (!task) throw new Error("Task not found.");
-  if (!canLogTime(user, task)) throw new Error("Only the assignee can log time on this task.");
+  if (!task) throw new Error("This task no longer exists.");
+  if (!canLogTime(user, task)) throw new Error("Only the person this task is assigned to can log time on it.");
   // A Completed task is closed work — no new time can be logged against it (the UI already
   // hides Start once a task leaves In Progress; this enforces it server-side too).
   if (task.status === "COMPLETED") throw new Error("This task is completed — time can no longer be logged on it.");
 
-  const now = new Date();
+  // One active timer per user at a time — a timer running on another task is stopped (PRD v1.1
+  // decision #6) and the task it was on is named back to the user so it never stops silently
+  // (QA D-08).
+  const { stopped } = await startTimerFor(user, task);
 
-  // One active timer per user at a time — auto-stop whatever else is running (PRD v1.1 decision #6).
-  const openLog = await prisma.timeLog.findFirst({
-    where: { userId: user.id, endTime: null },
-  });
-  if (openLog) {
-    const durationSeconds = Math.max(0, Math.round((now.getTime() - openLog.startTime.getTime()) / 1000));
-    await prisma.timeLog.update({
-      where: { id: openLog.id },
-      data: { endTime: now, durationSeconds },
-    });
+  // Starting work is what moves a New task to In Progress (QA F-06) — status follows activity.
+  if (task.status === "NEW") {
+    await prisma.task.update({ where: { id: taskId }, data: { status: "IN_PROGRESS" } });
+    await logBugStatusEvent(task, "IN_PROGRESS", user.id);
   }
 
-  await prisma.timeLog.create({
-    data: { taskId, userId: user.id, startTime: now },
+  revalidateTaskSurfaces(projectId, taskId);
+  if (stopped) revalidatePath(`/projects/${stopped.projectId}/tasks/${stopped.id}`);
+  return { ok: true as const, notice: stopped ? `Timer stopped for: ${stopped.name}` : undefined };
   });
-
-  revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
-  if (openLog) revalidatePath(`/projects/${projectId}/tasks/${openLog.taskId}`);
 }
 
 export async function stopTimer(projectId: string, taskId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -61,6 +60,7 @@ export async function stopTimer(projectId: string, taskId: string, _formData: Fo
   });
 
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }
 
 const editTimeLogSchema = z.object({
@@ -76,6 +76,7 @@ const editTimeLogSchema = z.object({
  * silent overwrite. Only closed entries (a stopped timer) are editable.
  */
 export async function editTimeLog(projectId: string, taskId: string, timeLogId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -128,4 +129,5 @@ export async function editTimeLog(projectId: string, taskId: string, timeLogId: 
   });
 
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }

@@ -14,9 +14,11 @@ import {
   canManageThisGroup,
   canAssignAccountManager,
   canAssignDependencyTracker,
+  getEligibleDependencyTrackers,
   isAdmin,
 } from "@/lib/permissions";
 import { notifyUsers } from "@/lib/notifications";
+import { runAction } from "@/lib/run-action";
 
 const PROJECT_STATUS_VALUES = ["PLANNING", "ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"] as const;
 
@@ -71,10 +73,12 @@ const createProjectSchema = z.object({
   maxAllocatedHours: z.string().optional(),
   hoursAllocationType: z.enum(HOURS_ALLOCATION_TYPE_VALUES).optional(),
   accountManagerId: z.string().optional(),
+  dependencyTrackerId: z.string().optional(),
   status: z.enum(PROJECT_STATUS_VALUES).optional(),
 });
 
 export async function createProject(formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -90,6 +94,7 @@ export async function createProject(formData: FormData) {
     maxAllocatedHours: formData.get("maxAllocatedHours") || undefined,
     hoursAllocationType: formData.get("hoursAllocationType") || undefined,
     accountManagerId: formData.get("accountManagerId") || undefined,
+    dependencyTrackerId: formData.get("dependencyTrackerId") || undefined,
     status: formData.get("status") || undefined,
   });
   if (!parsed.success) {
@@ -120,6 +125,15 @@ export async function createProject(formData: FormData) {
     }
   }
 
+  // The tracker must be someone eligible for the designation (an active Account/Client Services
+  // user) — same pool the project page's dropdown uses.
+  if (canSetExtras && parsed.data.dependencyTrackerId) {
+    const eligible = await getEligibleDependencyTrackers();
+    if (!eligible.some((u) => u.id === parsed.data.dependencyTrackerId)) {
+      throw new Error("Choose a valid Dependency Tracker.");
+    }
+  }
+
   const project = await prisma.project.create({
     data: {
       name: parsed.data.name,
@@ -133,6 +147,7 @@ export async function createProject(formData: FormData) {
       maxAllocatedHours: parsed.data.maxAllocatedHours ? Number(parsed.data.maxAllocatedHours) : undefined,
       hoursAllocationType: parsed.data.maxAllocatedHours ? parsed.data.hoursAllocationType : undefined,
       accountManagerId: canSetExtras ? parsed.data.accountManagerId : undefined,
+      dependencyTrackerId: canSetExtras ? parsed.data.dependencyTrackerId : undefined,
       status: parsed.data.status ?? undefined,
       createdById: user.id,
       taskGroups: {
@@ -160,6 +175,7 @@ export async function createProject(formData: FormData) {
   // Accountant can't view the project detail page (intake-only, no cluster/lead
   // membership) — send them back to the Dashboard instead of a page that would bounce them.
   redirect(isAdmin(user) ? `/projects/${project.id}` : "/");
+  });
 }
 
 const updateProjectSchema = z.object({
@@ -177,6 +193,7 @@ const updateProjectSchema = z.object({
 });
 
 export async function updateProject(projectId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -235,6 +252,7 @@ export async function updateProject(projectId: string, formData: FormData) {
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/projects");
+  });
 }
 
 const attachGroupSchema = z.object({
@@ -243,6 +261,7 @@ const attachGroupSchema = z.object({
 
 /** Attaches a new discipline Lead to the project, creating their Task Group. */
 export async function attachTaskGroup(projectId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -284,9 +303,11 @@ export async function attachTaskGroup(projectId: string, formData: FormData) {
   await notifyGroupAttached(project.clusterId, project.id, project.name, group.userId, user.id);
 
   revalidatePath(`/projects/${projectId}`);
+  });
 }
 
 export async function removeTaskGroup(projectId: string, groupId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -310,6 +331,7 @@ export async function removeTaskGroup(projectId: string, groupId: string, _formD
   await prisma.taskGroup.delete({ where: { id: groupId } });
 
   revalidatePath(`/projects/${projectId}`);
+  });
 }
 
 /**
@@ -319,6 +341,7 @@ export async function removeTaskGroup(projectId: string, groupId: string, _formD
  * unarchiveProject.
  */
 export async function archiveProject(projectId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
   if (!isAdmin(user)) throw new Error("Only an Admin can archive a project.");
@@ -331,10 +354,12 @@ export async function archiveProject(projectId: string, _formData: FormData) {
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
   redirect("/projects");
+  });
 }
 
 /** Restore an archived project back into every listing/report — Admin only. */
 export async function unarchiveProject(projectId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
   if (!isAdmin(user)) throw new Error("Only an Admin can restore a project.");
@@ -346,6 +371,7 @@ export async function unarchiveProject(projectId: string, _formData: FormData) {
 
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
+  });
 }
 
 /**
@@ -359,6 +385,7 @@ export async function deleteProject(
   _prevState: { error?: string } | undefined,
   formData: FormData,
 ): Promise<{ error?: string }> {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) return { error: "Not signed in." };
   if (!isAdmin(user)) return { error: "Only an Admin can delete a project." };
@@ -415,4 +442,5 @@ export async function deleteProject(
 
   revalidatePath("/projects");
   redirect("/projects");
+  });
 }

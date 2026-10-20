@@ -5,18 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { getDashboardData, type DashTask } from "@/lib/dashboard";
 import { getLeadDashboardData, type LeadDashboardData } from "@/lib/lead-dashboard";
 import { getSprintProgressData, type SprintProgressData } from "@/lib/sprint-dashboard";
-import { canViewDashboard, isLead } from "@/lib/permissions";
+import { canViewDashboard, hasPersonalTaskList, isLead } from "@/lib/permissions";
 import { formatDuration } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
-
-const STATUS_LABELS: Record<string, string> = {
-  NEW: "New",
-  IN_PROGRESS: "In Progress",
-  REVIEW: "Review",
-  REVISION: "Revision",
-  COMPLETED: "Completed",
-  ON_HOLD: "On Hold",
-};
+import { statusLabel } from "@/lib/bug";
 
 // Stroke icons for the KPI tiles (24px grid). Decorative — the label carries the meaning.
 const TILE_ICONS = {
@@ -371,9 +363,9 @@ function LeadDashboard({ data, sprintProgress }: { data: LeadDashboardData; spri
           Lead's action queue, rather than duplicating that list here. */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Awaiting My Review" value={data.reviewCount} tone={data.reviewCount > 0 ? "warn" : "default"} href="/my-reviews" />
-        <StatCard label="Unassigned" value={data.unassignedCount} tone={data.unassignedCount > 0 ? "danger" : "default"} href="/my-reviews" />
-        <StatCard label="Overdue" value={data.overdueTasks.length} tone={data.overdueTasks.length > 0 ? "danger" : "default"} />
-        <StatCard label="Revision-Flagged" value={data.flaggedCount} tone={data.flaggedCount > 0 ? "danger" : "default"} />
+        <StatCard label="Unassigned" value={data.unassignedCount} tone={data.unassignedCount > 0 ? "danger" : "default"} href="/my-reviews?view=unassigned" />
+        <StatCard label="Overdue" value={data.overdueTasks.length} tone={data.overdueTasks.length > 0 ? "danger" : "default"} href="/my-reviews?view=overdue" />
+        <StatCard label="Revision-Flagged" value={data.flaggedCount} tone={data.flaggedCount > 0 ? "danger" : "default"} href="/my-reviews?view=flagged" />
       </div>
 
       <div className="mt-8 flex flex-col gap-8">
@@ -437,7 +429,7 @@ function LeadDashboard({ data, sprintProgress }: { data: LeadDashboardData; spri
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.projectName}</td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.assigneeName ?? "Unassigned"}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{STATUS_LABELS[t.status] ?? t.status}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{statusLabel(t.status, t.taskType)}</td>
                       <td className="px-4 py-2.5">
                         <span
                           className={`inline-flex min-w-6 justify-center rounded px-1.5 py-0.5 text-xs font-semibold ${
@@ -482,7 +474,9 @@ export default async function DashboardPage() {
     // A view-only Dependency Tracker (PRD 8.13) has no task list of their own — their home is
     // the dependency queue. Only redirect there if they actually hold a designation.
     const trackerCount = await prisma.project.count({ where: { dependencyTrackerId: user.id, archivedAt: null } });
-    redirect(trackerCount > 0 ? "/dependencies" : "/my-tasks");
+    // An Account Manager (cluster-scoped Account/Client Services) has no personal task list — their
+    // home is the project list.
+    redirect(trackerCount > 0 ? "/dependencies" : hasPersonalTaskList(user) ? "/my-tasks" : "/projects");
   }
 
   const [data, sprintProgress] = await Promise.all([getDashboardData(user), getSprintProgressData(user)]);
@@ -655,7 +649,7 @@ export default async function DashboardPage() {
                         <p className="text-xs text-gs-gray">{t.projectName}</p>
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.assigneeName ?? "Unassigned"}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{STATUS_LABELS[t.status] ?? t.status}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{statusLabel(t.status, t.taskType)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -721,7 +715,7 @@ export default async function DashboardPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.projectName}</td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.assigneeName ?? "Unassigned"}</td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{STATUS_LABELS[t.status] ?? t.status}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{statusLabel(t.status, t.taskType)}</td>
                       <td className="px-4 py-2.5">
                         <span
                           className={`inline-flex min-w-6 justify-center rounded px-1.5 py-0.5 text-xs font-semibold ${

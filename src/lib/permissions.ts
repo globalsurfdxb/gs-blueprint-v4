@@ -91,14 +91,19 @@ export function canViewReports(user: CurrentUser) {
  * The Timesheet / Hours report (per-person logged hours). Deliberately NOT gated by
  * canViewReports: it is available to every delivery role — Contributor (own hours only), Lead
  * (their Task Group[s]), Cluster Head (their cluster, pod-restricted where it applies), Admin
- * (org-wide) — but EXCLUDES Account/Client Services (any designation, incl. PAM / Dependency
- * Tracker). Hours logged is cost-adjacent information, and ACS sits below the cost/margin
- * ceiling by design, so it stays outside their view — same as task authority and cost data.
- * Per-row scoping is applied in getTimeLogReport, not here.
+ * (org-wide) — and, on request, to cluster-scoped Account/Client Services (the Account Managers,
+ * limited to their cluster's projects). This reverses the earlier "ACS stays outside hours data"
+ * rule for that role; a cluster-less Dependency Tracker coordinator is still excluded (they have
+ * no cluster scope to report on). Per-row scoping is applied in getTimeLogReport, not here.
  */
 export function canViewHoursReport(user: CurrentUser) {
-  if (isAnyAccountClientServices(user)) return false;
-  return isAdmin(user) || isAnyClusterHead(user) || isLead(user) || isContributor(user);
+  return (
+    isAdmin(user) ||
+    isAnyClusterHead(user) ||
+    isAnyAccountClientServices(user) ||
+    isLead(user) ||
+    isContributor(user)
+  );
 }
 
 /** Cross-project search & filters (PRD 8.10) is an oversight capability — the same roles
@@ -171,10 +176,19 @@ export function isLeadOfGroup(user: CurrentUser, group: TaskGroupRef) {
 // projects across multiple clusters). Visibility and editing are restricted to Admin and
 // Account/Client Services only — Cluster Head has no client access (v1.1 feedback).
 export function canManageClients(user: CurrentUser) {
-  // Cluster-scoped ACS only — a cluster-less Dependency Tracker coordinator (v1.26) has the ACS
-  // ceiling but no cluster oversight and no client management (isAnyAccountClientServices
-  // already excludes them). Admin unaffected; Harsha (cluster ACS) unaffected.
-  return isAdmin(user) || isAnyAccountClientServices(user);
+  // Admin only. Account/Client Services (the Account Managers, e.g. Harsha) no longer have the
+  // Clients module — it was removed from their access on request; they reach a client's work
+  // through its projects instead.
+  return isAdmin(user);
+}
+
+/**
+ * Does this person have a personal "My Tasks" list? Account Managers (cluster-scoped
+ * Account/Client Services) oversee projects rather than being assigned work, so the My Tasks
+ * module is not part of their access.
+ */
+export function hasPersonalTaskList(user: CurrentUser) {
+  return !isAnyAccountClientServices(user);
 }
 
 /** Creating a brand-new client: Admin or Accountant (intake) only — Account/Client
@@ -365,6 +379,9 @@ export async function canViewTask(
 ): Promise<boolean> {
   if (task.assignedToId === user.id) return true;
   if (task.createdById === user.id) return true;
+  // Admin-set "only their own tasks" (e.g. a Lead who must not see teammates' work): nothing below
+  // — group Lead, oversight, calendar grant or studio ticket — can widen it.
+  if (user.restrictToOwnTasks) return false;
   if (task.groupId) {
     const group = project.taskGroups.find((g) => g.id === task.groupId);
     if (group && (canOverseeGroup(user, project, group) || isLeadOfGroup(user, group))) return true;
@@ -518,14 +535,12 @@ export function canDeleteTask(
  * directly to one of their own Contributors instead. A Completed task is historical record
  * and is never reassigned.
  *
- * Subtasks are excluded (PRD 8.2 / v1.1 decision #11): a subtask is a private breakdown that
- * stays with its creator and is never reassigned. Reassigning one stranded it under a parent
- * the new assignee couldn't see — to delegate work to a teammate, create a normal task in the
- * group instead, which stays fully visible on the project.
+ * Child tasks (subtasks) can be reassigned too (QA F-03): a Lead needs to hand a breakdown item
+ * to a teammate without recreating it. This deliberately relaxes the original PRD 8.2 / v1.1
+ * decision #11 ("a subtask stays with its creator"), which is why the old exclusion is gone.
  */
 export function canReassignTask(user: CurrentUser, group: TaskGroupRef | null, task: Task) {
   return (
-    task.parentTaskId === null &&
     task.status !== "COMPLETED" &&
     group !== null &&
     canAssignAnyoneInGroup(user, group)
@@ -802,6 +817,25 @@ export function canManageSprints(
     isAdmin(user) ||
     clusterHeadReachesProject(user, project) ||
     sprintEnabledGroups.some((g) => g.leadUserId === user.id)
+  );
+}
+
+/**
+ * Placing ONE task into a Sprint (or back to Backlog). Sprint managers (above) can for any task;
+ * the task's own assignee or creator can too — a Dev/QA Contributor planning their own work
+ * previously got no Sprint field at all and so "couldn't add a task to a sprint" (QA A-03).
+ * Creating or editing the Sprints themselves stays with canManageSprints.
+ */
+export function canAssignTaskToSprint(
+  user: CurrentUser,
+  project: ProjectWithGroups,
+  sprintEnabledGroups: { leadUserId: string }[],
+  task: { assignedToId: string | null; createdById: string },
+) {
+  return (
+    canManageSprints(user, project, sprintEnabledGroups) ||
+    task.assignedToId === user.id ||
+    task.createdById === user.id
   );
 }
 

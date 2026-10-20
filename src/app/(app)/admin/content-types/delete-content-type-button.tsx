@@ -1,5 +1,7 @@
 "use client";
 
+
+import { ActionForm } from "@/components/action-form";
 export function DeleteContentTypeButton({
   name,
   action,
@@ -8,7 +10,7 @@ export function DeleteContentTypeButton({
   action: (formData: FormData) => void;
 }) {
   return (
-    <form
+    <ActionForm
       action={action}
       onSubmit={(e) => {
         if (!confirm(`Delete the "${name}" Content Type? This cannot be undone.`)) {
@@ -19,6 +21,6 @@ export function DeleteContentTypeButton({
       <button type="submit" className="px-1 py-2.5 text-xs text-gs-gray hover:text-gs-red hover:underline">
         Delete
       </button>
-    </form>
+    </ActionForm>
   );
 }

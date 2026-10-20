@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageContentCalendar, SOCIAL_MEDIA_POD_NAME } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 const monthlyBriefSchema = z.object({
   month: z.coerce.number().int().min(1).max(12),
@@ -15,6 +16,7 @@ const monthlyBriefSchema = z.object({
 /** One brief per Project + Month + Year, owned by that project's own Social Media Task
  * Group Lead (or Admin) — created on first save, edited in place on every save after. */
 export async function upsertMonthlyBrief(projectId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -47,4 +49,5 @@ export async function upsertMonthlyBrief(projectId: string, formData: FormData) 
   });
 
   revalidatePath(`/content-calendar/${projectId}`);
+  });
 }

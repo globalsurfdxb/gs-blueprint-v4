@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageBugImages } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 // Screenshot Attachments on Bugs (PRD 8.2.4) — deliberately narrow limits. Do NOT raise
 // these without a product decision.
@@ -57,6 +58,7 @@ async function loadBugForImages(taskId: string) {
  * file picker can't get through. The binary goes to Vercel Blob; only a reference is stored.
  */
 export async function uploadBugImage(projectId: string, taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -78,12 +80,24 @@ export async function uploadBugImage(projectId: string, taskId: string, formData
   const sniffed = sniffImageType(bytes);
   if (!sniffed) throw new Error("That file isn't a valid PNG, JPG or WebP image.");
 
+  // Without a Blob store connected there is nothing to upload to — say so plainly instead of the
+  // vendor's "No token found" (QA A-02, E-02).
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    throw new Error("Screenshot storage isn't set up on this environment yet. Ask an Admin to connect Vercel Blob storage.");
+  }
+
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) || "image";
-  const blob = await put(`bug-images/${taskId}/${safeName}`, file, {
-    access: "public",
-    addRandomSuffix: true,
-    contentType: sniffed,
-  });
+  let blob: Awaited<ReturnType<typeof put>>;
+  try {
+    blob = await put(`bug-images/${taskId}/${safeName}`, file, {
+      access: "public",
+      addRandomSuffix: true,
+      contentType: sniffed,
+    });
+  } catch (err) {
+    console.error("[uploadBugImage] blob upload failed", err);
+    throw new Error("The screenshot couldn't be uploaded. Please try again, or use a smaller image.");
+  }
 
   await prisma.bugImage.create({
     data: {
@@ -97,10 +111,12 @@ export async function uploadBugImage(projectId: string, taskId: string, formData
   });
 
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }
 
 /** Remove a screenshot — deletes both the DB reference and the blob. No versioning/history. */
 export async function removeBugImage(projectId: string, taskId: string, imageId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -126,4 +142,5 @@ export async function removeBugImage(projectId: string, taskId: string, imageId:
   }
 
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }

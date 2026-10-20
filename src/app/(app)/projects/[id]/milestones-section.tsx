@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 
 export type MilestoneRow = {
@@ -10,6 +11,31 @@ export type MilestoneRow = {
   dueInput: string; // YYYY-MM-DD
   completed: boolean;
 };
+
+/** The tick box. A real button with a generous hit area, hover feedback and a busy state, so it
+ * reads as clickable and a slow save can't be double-submitted (QA A-06). */
+function MilestoneCheck({ completed }: { completed: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      aria-busy={pending}
+      aria-pressed={completed}
+      aria-label={completed ? "Mark incomplete" : "Mark complete"}
+      title={completed ? "Mark incomplete" : "Mark complete"}
+      className={`-m-1 flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-gs-black/5 ${pending ? "opacity-50" : ""}`}
+    >
+      <span
+        className={`flex h-5 w-5 items-center justify-center rounded border text-xs transition-colors ${
+          completed ? "border-green-600 bg-green-600 text-white" : "border-gs-gray/50 text-transparent hover:border-green-600"
+        }`}
+      >
+        ✓
+      </span>
+    </button>
+  );
+}
 
 /**
  * Project Milestones (PRD — agency-wide): a short, ordered checklist above the Task Groups.
@@ -106,21 +132,17 @@ export function MilestonesSection({
                     <div className="flex items-center gap-3 px-4 py-2.5">
                       {/* Check / uncheck — manual only (never computed from task status). */}
                       {canManage ? (
-                        <form action={toggleAction.bind(null, m.id)}>
-                          <button
-                            type="submit"
-                            aria-label={m.completed ? "Mark incomplete" : "Mark complete"}
-                            className={`flex h-5 w-5 items-center justify-center rounded border text-xs ${
-                              m.completed ? "border-green-600 bg-green-600 text-white" : "border-gs-gray/40 text-transparent hover:border-gs-gray"
-                            }`}
-                          >
-                            ✓
-                          </button>
-                        </form>
+                        <ActionForm
+                          action={toggleAction.bind(null, m.id)}
+                          successMessage={m.completed ? "Milestone marked incomplete." : "Milestone completed."}
+                        >
+                          <MilestoneCheck completed={m.completed} />
+                        </ActionForm>
                       ) : (
                         <span
                           aria-label={m.completed ? "Completed" : "Not completed"}
-                          className={`flex h-5 w-5 items-center justify-center rounded border text-xs ${
+                          title="Only project managers can tick milestones"
+                          className={`flex h-5 w-5 cursor-not-allowed items-center justify-center rounded border text-xs ${
                             m.completed ? "border-green-600 bg-green-600 text-white" : "border-gs-gray/30 text-transparent"
                           }`}
                         >
@@ -135,18 +157,18 @@ export function MilestonesSection({
 
                       {canManage && (
                         <div className="flex items-center gap-1.5 text-gs-gray">
-                          <form action={reorderAction.bind(null, m.id)}>
+                          <ActionForm action={reorderAction.bind(null, m.id)}>
                             <input type="hidden" name="direction" value="up" />
                             <button type="submit" disabled={i === 0} aria-label="Move up" className="px-1 hover:text-gs-black disabled:opacity-30">↑</button>
-                          </form>
-                          <form action={reorderAction.bind(null, m.id)}>
+                          </ActionForm>
+                          <ActionForm action={reorderAction.bind(null, m.id)}>
                             <input type="hidden" name="direction" value="down" />
                             <button type="submit" disabled={i === milestones.length - 1} aria-label="Move down" className="px-1 hover:text-gs-black disabled:opacity-30">↓</button>
-                          </form>
+                          </ActionForm>
                           <button type="button" onClick={() => setEditingId(m.id)} className="px-1 text-xs hover:underline">Edit</button>
-                          <form action={deleteAction.bind(null, m.id)}>
+                          <ActionForm action={deleteAction.bind(null, m.id)}>
                             <button type="submit" aria-label="Delete milestone" className="px-1 text-xs hover:text-gs-red">✕</button>
-                          </form>
+                          </ActionForm>
                         </div>
                       )}
                     </div>

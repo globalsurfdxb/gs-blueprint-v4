@@ -247,7 +247,7 @@ export function TaskGroupsSection({
             <button
               type="button"
               onClick={() => drawer.openCreate(projectId)}
-              className="text-xs font-medium text-gs-red hover:underline"
+              className="btn btn-primary btn-sm"
             >
               + Add Task
             </button>
@@ -297,21 +297,12 @@ export function TaskGroupsSection({
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  {g.canCreateTask && drawer && (
-                    <button
-                      type="button"
-                      onClick={() => drawer.openCreate(projectId, g.id)}
-                      className="text-xs text-gs-red hover:underline"
-                    >
-                      New Task
-                    </button>
-                  )}
                   {g.canRemove && (
-                    <form action={removeWithId}>
+                    <ActionForm action={removeWithId}>
                       <button type="submit" className="text-xs text-gs-gray hover:underline">
                         Remove Group
                       </button>
-                    </form>
+                    </ActionForm>
                   )}
                 </div>
               </div>
@@ -358,7 +349,7 @@ export function TaskGroupsSection({
       </div>
 
       {canAttachGroups && (
-        <form action={attachAction} className="mt-3 flex flex-wrap items-end gap-3">
+        <ActionForm action={attachAction} className="mt-3 flex flex-wrap items-end gap-3">
           <div className="flex w-full flex-col gap-1.5 sm:w-auto">
             <label className="text-xs font-medium text-gs-gray">Attach Discipline Lead</label>
             <select name="leadRoleId" required className="field w-full min-w-0 sm:w-72">
@@ -377,7 +368,7 @@ export function TaskGroupsSection({
           >
             Attach
           </button>
-        </form>
+        </ActionForm>
       )}
       {groupCards.some((g) => g.canCreateTask) && (
         <p className="mt-2 text-xs text-gs-gray">

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { ActionForm } from "@/components/action-form";
 
 export function EditEntryTitle({
   title,
@@ -36,7 +37,7 @@ export function EditEntryTitle({
   }
 
   return (
-    <form action={action} className="flex flex-wrap items-center gap-2">
+    <ActionForm action={action} className="flex flex-wrap items-center gap-2">
       <input
         type="text"
         name="title"
@@ -57,6 +58,6 @@ export function EditEntryTitle({
       >
         Cancel
       </button>
-    </form>
+    </ActionForm>
   );
 }

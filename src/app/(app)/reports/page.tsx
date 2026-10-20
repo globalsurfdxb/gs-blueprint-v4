@@ -15,7 +15,8 @@ export default async function ReportsIndexPage() {
   const { label } = getReportScope(user);
 
   // Time Logs (hours) is available to every delivery role — Contributor (own hours), Lead
-  // (their team), Cluster Head, Admin — but not ACS. The other two are oversight-only.
+  // (their team), Cluster Head, Admin — and to Account Managers (their cluster). The other two
+  // are oversight-only.
   const reports = [
     {
       href: "/reports/time-logs",

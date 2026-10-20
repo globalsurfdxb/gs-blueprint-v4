@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { canCreateClient, getEligibleAccountManagers, isAdmin } from "@/lib/permissions";
+import { canCreateClient, isAdmin } from "@/lib/permissions";
+import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/actions/clients";
 import { ClientForm } from "../client-form";
 import { PageHeader } from "@/components/page-header";
@@ -10,10 +11,7 @@ export default async function NewClientPage() {
   if (!user) redirect("/login");
   if (!canCreateClient(user)) redirect("/clients");
 
-  // Accountant is intake-only — Account Owner assignment is handled later, same
-  // top-down principle as Project Account Manager (PRD correction #2/#7).
-  const canSetOwner = isAdmin(user);
-  const owners = canSetOwner ? await getEligibleAccountManagers() : [];
+  const industries = (await prisma.industry.findMany({ orderBy: { name: "asc" } })).map((i) => i.name);
 
   return (
     <div className="page-sm">
@@ -23,9 +21,9 @@ export default async function NewClientPage() {
       <div className="mt-6">
         <ClientForm
           action={createClient}
-          owners={owners}
+          industries={industries}
           submitLabel="Create Client"
-          showAccountOwner={canSetOwner}
+          canManageIndustries={isAdmin(user)}
         />
       </div>
     </div>

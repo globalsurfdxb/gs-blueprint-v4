@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import type { CurrentUser } from "@/lib/auth";
-import { isAdmin, isContributor, isAnyAccountClientServices } from "@/lib/permissions";
+import { isAdmin, isContributor } from "@/lib/permissions";
 import { daysOverdue } from "@/lib/timezone";
 import { secondsSince } from "@/lib/format";
 import type { Prisma } from "@/generated/prisma/client";
@@ -76,7 +76,10 @@ function getReportScopeRaw(user: CurrentUser): ReportScope {
   if (lead) {
     return {
       label: "Your team",
-      taskWhere: { group: { leadUserId: user.id } },
+      // A Lead restricted to their own tasks (Admin setting) only reports on those.
+      taskWhere: user.restrictToOwnTasks
+        ? { group: { leadUserId: user.id }, OR: [{ assignedToId: user.id }, { createdById: user.id }] }
+        : { group: { leadUserId: user.id } },
       projectWhere: { taskGroups: { some: { leadUserId: user.id } } },
     };
   }
@@ -304,13 +307,10 @@ function resolveRange(params: TimeLogParams): { start: Date; endExclusive: Date;
 export async function getTimeLogReport(user: CurrentUser, params: TimeLogParams): Promise<TimeLogReport> {
   const { start, endExclusive, fromLabel, toLabel } = resolveRange(params);
 
-  // Hours report scoping (PRD Timesheet/Hours): ACS is excluded entirely (defensive — the gate
-  // already blocks them); a Contributor sees only their OWN logged hours; Lead/Cluster-Head/
-  // Admin use their existing task-visibility scope. Only getReportScope's oversight taskWhere is
-  // reused — the contributor case is self-only and never touches another person's hours.
-  if (isAnyAccountClientServices(user)) {
-    return { fromLabel, toLabel, groups: [], grandTotalSeconds: 0 };
-  }
+  // Hours report scoping (PRD Timesheet/Hours): a Contributor sees only their OWN logged hours;
+  // Lead / Cluster Head / Admin / cluster-scoped Account Manager use their existing report scope
+  // (an Account Manager's is their cluster's projects). Only getReportScope's oversight taskWhere
+  // is reused — the contributor case is self-only and never touches another person's hours.
   const contributor = isContributor(user);
   const taskFilter: Prisma.TaskWhereInput = contributor
     ? { project: { archivedAt: null } }

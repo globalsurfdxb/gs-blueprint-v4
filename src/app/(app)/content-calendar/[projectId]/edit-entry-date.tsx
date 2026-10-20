@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatDate, addWorkingDays } from "@/lib/format";
+import { ActionForm } from "@/components/action-form";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -47,7 +48,7 @@ export function EditEntryDate({
   }
 
   return (
-    <form action={action} className="flex flex-wrap items-center gap-2">
+    <ActionForm action={action} className="flex flex-wrap items-center gap-2">
       <input
         type="date"
         name="publishDate"
@@ -69,6 +70,6 @@ export function EditEntryDate({
       >
         Cancel
       </button>
-    </form>
+    </ActionForm>
   );
 }

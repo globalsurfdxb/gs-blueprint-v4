@@ -15,9 +15,9 @@ import {
   canReassignBugWithinGroup,
   isRoleContributorInGroup,
   canDeleteTask,
-  canManageSprints,
 } from "@/lib/permissions";
 import { notifyUsers } from "@/lib/notifications";
+import { runAction } from "@/lib/run-action";
 
 const PRIORITY_VALUES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 const SEVERITY_VALUES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
@@ -82,16 +82,13 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
   if (!group) throw new Error("Task Group not found.");
 
   // Sprint (PRD 8.14): optional; blank = Backlog. If set, the group's discipline must have
-  // Sprint Workflow on, the sprint must belong to this project, and the creator must be able
-  // to manage sprints here (Lead/CH/Admin) — never a workflow gate, just a planning field.
+  // Sprint Workflow on and the sprint must belong to this project — never a workflow gate, just
+  // a planning field. Whoever may create the task (checked below) may place their own new task in
+  // a Sprint, same as the assignee/creator rule in canAssignTaskToSprint (QA A-03).
   const sprintId = parsed.data.sprintId || null;
   if (sprintId) {
     if (!group.pod?.sprintWorkflowEnabled) {
       throw new Error("Sprint Workflow isn't enabled for this discipline.");
-    }
-    const sprintEnabledGroups = project.taskGroups.filter((g) => g.pod?.sprintWorkflowEnabled);
-    if (!canManageSprints(user, project, sprintEnabledGroups)) {
-      throw new Error("You don't have permission to assign Sprints on this project.");
     }
     const sprint = await prisma.sprint.findUnique({ where: { id: sprintId }, select: { projectId: true } });
     if (!sprint || sprint.projectId !== projectId) {
@@ -194,7 +191,9 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
  * full-page create (via createTaskCore), but it returns instead of redirecting so the drawer
  * can close in place and the underlying view refreshes. */
 export async function createTaskInDrawer(projectId: string, formData: FormData) {
+  return runAction(async () => {
   await createTaskCore(projectId, formData);
+  });
 }
 
 const createSubtaskSchema = z.object({
@@ -204,6 +203,7 @@ const createSubtaskSchema = z.object({
 });
 
 export async function createSubtask(projectId: string, parentTaskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -241,6 +241,7 @@ export async function createSubtask(projectId: string, parentTaskId: string, for
   });
 
   revalidatePath(`/projects/${projectId}/tasks/${parentTaskId}`);
+  });
 }
 
 const assignTaskSchema = z.object({
@@ -250,6 +251,7 @@ const assignTaskSchema = z.object({
 /** Assigns a currently-unassigned task — the path a cross-group handoff's receiving
  * Lead uses to hand the new task to a member of their own group. */
 export async function assignHandoffTask(taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -277,6 +279,7 @@ export async function assignHandoffTask(taskId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
+  });
 }
 
 /** Reassigns an already-assigned task. Two authority paths:
@@ -286,6 +289,7 @@ export async function assignHandoffTask(taskId: string, formData: FormData) {
  *    group can hand it to another Contributor in the same group with no Lead step, so a
  *    QA↔fixer retest loop doesn't route through the Lead. The target is validated server-side. */
 export async function reassignTask(taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -325,6 +329,12 @@ export async function reassignTask(taskId: string, formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
   }
 
+  // Reassign means a DIFFERENT person (QA F-01). Sending work back to the same assignee is what
+  // Send to Revision is for — it keeps the revision count and notifies the right people.
+  if (parsed.data.assignedToId === task.assignedToId) {
+    throw new Error("This task is already assigned to that person. To send it back to them, use Send to Revision.");
+  }
+
   // The Bug same-group exception is narrow: when a Contributor (not a Lead/Admin) performs the
   // reassignment, the target must be a Contributor already in this same group — never the Lead,
   // never someone outside the team. The Lead/Admin path keeps its existing full-team pool.
@@ -350,6 +360,7 @@ export async function reassignTask(taskId: string, formData: FormData) {
   }
 
   revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
+  });
 }
 
 /**
@@ -363,6 +374,7 @@ export async function reassignTask(taskId: string, formData: FormData) {
  * being force-deleted along with its predecessor.
  */
 export async function deleteTask(taskId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -421,4 +433,5 @@ export async function deleteTask(taskId: string, _formData: FormData) {
 
   revalidatePath(`/projects/${task.projectId}`);
   redirect(`/projects/${task.projectId}`);
+  });
 }

@@ -64,6 +64,8 @@ export async function getLeadDashboardData(user: CurrentUser): Promise<LeadDashb
       parentTaskId: null,
       status: { not: "COMPLETED" },
       project: { status: { not: "COMPLETED" } },
+      // A Lead an Admin has restricted to their own tasks only rolls up their own work.
+      ...(user.restrictToOwnTasks ? { OR: [{ assignedToId: user.id }, { createdById: user.id }] } : {}),
     },
     include: { assignedTo: { select: { id: true, name: true, location: true } }, project: { select: { name: true } } },
     orderBy: { dueDate: "asc" },
@@ -77,6 +79,7 @@ export async function getLeadDashboardData(user: CurrentUser): Promise<LeadDashb
     assigneeName: t.assignedTo?.name ?? null,
     dueDate: formatDate(t.dueDate),
     status: t.status,
+    taskType: t.taskType,
     revisionCount: t.revisionCount,
     daysLate: daysOverdue(t.dueDate, t.assignedTo?.location ?? FALLBACK_LOCATION, now),
   });
@@ -116,7 +119,7 @@ export async function getLeadDashboardData(user: CurrentUser): Promise<LeadDashb
 
   // Team roster = the pod members behind these groups, so people with zero open work still
   // show (capacity at a glance), not only those who currently hold a task.
-  if (podIds.length > 0) {
+  if (podIds.length > 0 && !user.restrictToOwnTasks) {
     const members = await prisma.userRole.findMany({
       where: { podId: { in: podIds }, role: { in: ["CONTRIBUTOR", "LEAD"] }, user: { isActive: true } },
       include: { user: { select: { id: true, name: true } } },

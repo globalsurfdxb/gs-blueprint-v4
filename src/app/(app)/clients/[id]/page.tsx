@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { canManageClients, canViewProject, isAdmin, getEligibleAccountManagers } from "@/lib/permissions";
+import { canManageClients, canViewProject, isAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { updateClient, deleteClient } from "@/lib/actions/clients";
 import { ClientForm } from "../client-form";
@@ -14,7 +14,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   if (!canManageClients(user)) redirect("/");
 
   const { id } = await params;
-  const [client, owners] = await Promise.all([
+  const [client, industryRows] = await Promise.all([
     prisma.client.findUnique({
       where: { id },
       include: {
@@ -24,7 +24,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         },
       },
     }),
-    getEligibleAccountManagers(),
+    prisma.industry.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   if (!client) notFound();
@@ -51,9 +51,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       <div className="mt-6">
         <ClientForm
           action={updateClientWithId}
-          owners={owners}
+          industries={industryRows.map((i) => i.name)}
           defaults={client}
           submitLabel="Save Changes"
+          canManageIndustries={isAdmin(user)}
         />
       </div>
 

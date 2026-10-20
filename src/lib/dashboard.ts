@@ -41,6 +41,7 @@ export type DashTask = {
   assigneeName: string | null;
   dueDate: string;
   status: string;
+  taskType: string;
   revisionCount: number;
   daysLate: number | null;
 };
@@ -134,6 +135,7 @@ export async function getDashboardData(user: CurrentUser): Promise<DashboardData
     assigneeName: t.assignedTo?.name ?? null,
     dueDate: formatDate(t.dueDate),
     status: t.status,
+    taskType: t.taskType,
     revisionCount: t.revisionCount,
     daysLate: daysOverdue(t.dueDate, t.assignedTo?.location ?? FALLBACK_LOCATION, now),
   });

@@ -8,6 +8,7 @@ import { canManageContentCalendar, canViewContentCalendar, SOCIAL_MEDIA_POD_NAME
 import { subtractWorkingDays, formatDate } from "@/lib/format";
 import { notifyUsers } from "@/lib/notifications";
 import { getLocalDateString } from "@/lib/timezone";
+import { runAction } from "@/lib/run-action";
 
 const calendarEntrySchema = z.object({
   publishDate: z.string().min(1, "Publish Date is required."),
@@ -24,6 +25,7 @@ const calendarEntrySchema = z.object({
  * Assign flow, the same as receiving any other cross-team hand-off.
  */
 export async function createCalendarEntry(projectId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -101,6 +103,7 @@ export async function createCalendarEntry(projectId: string, formData: FormData)
   revalidatePath(`/content-calendar/${projectId}`);
   revalidatePath(`/projects/${projectId}`);
   return task;
+  });
 }
 
 const updateDateSchema = z.object({
@@ -115,6 +118,7 @@ const updateDateSchema = z.object({
  * handed to Design, so its date is fixed).
  */
 export async function updateCalendarEntryDate(projectId: string, taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -176,6 +180,7 @@ export async function updateCalendarEntryDate(projectId: string, taskId: string,
   revalidatePath(`/content-calendar/${projectId}`);
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/tasks/${task.id}`);
+  });
 }
 
 const updateTitleSchema = z.object({
@@ -189,6 +194,7 @@ const updateTitleSchema = z.object({
  * topic no longer has enough runway to change).
  */
 export async function updateCalendarEntryTitle(projectId: string, taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -221,4 +227,5 @@ export async function updateCalendarEntryTitle(projectId: string, taskId: string
   revalidatePath(`/content-calendar/${projectId}`);
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }

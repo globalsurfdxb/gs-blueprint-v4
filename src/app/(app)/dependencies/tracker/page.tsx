@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoFilterForm } from "@/components/auto-filter-form";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -95,7 +96,7 @@ Active cross-department work on the projects you coordinate — view only. Compl
         </>}
       />
 
-      <form method="get" className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-gs-gray/15 bg-white p-3">
+      <AutoFilterForm className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-gs-gray/15 bg-white p-3">
         {/* Preserve deep-link filters across a manual form submit so filters compose. */}
         {discipline && <input type="hidden" name="discipline" value={discipline} />}
         {stuckOn && <input type="hidden" name="stuck" value="1" />}
@@ -138,12 +139,11 @@ Active cross-department work on the projects you coordinate — view only. Compl
           <input type="checkbox" name="overdue" value="1" defaultChecked={overdueOn} className="h-4 w-4 rounded border-gs-gray/40" />
           Overdue only
         </label>
-        <button type="submit" className="btn btn-dark btn-sm">Apply</button>
         {anyFilter && (
           <Link href="/dependencies/tracker" className="flex min-h-9 items-center px-2 text-sm text-gs-gray hover:underline">Clear</Link>
         )}
-        <p className="w-full text-xs text-gs-gray">From / To apply when Due is set to “Custom range”.</p>
-      </form>
+        <p className="w-full text-xs text-gs-gray">Filters apply as you change them. From / To apply when Due is set to “Custom range”.</p>
+      </AutoFilterForm>
 
       {(discipline || stuckOn) && (
         <p className="mt-3 text-xs text-gs-gray">

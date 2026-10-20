@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoFilterForm } from "@/components/auto-filter-form";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -122,7 +123,7 @@ export default async function DependencyProjectsPage({
         </div>
       )}
 
-      <form method="get" className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-gs-gray/15 bg-white p-3">
+      <AutoFilterForm className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-gs-gray/15 bg-white p-3">
         <input type="hidden" name="project" value={projectParam} />
         <div className="flex flex-col gap-1">
           <label htmlFor="status" className="text-xs font-medium text-gs-gray">Status</label>
@@ -150,12 +151,11 @@ export default async function DependencyProjectsPage({
           <label htmlFor="to" className="text-xs font-medium text-gs-gray">To</label>
           <input id="to" type="date" name="to" defaultValue={to ?? ""} className="field field-sm" />
         </div>
-        <button type="submit" className="btn btn-dark btn-sm">Apply</button>
         {anyFilter && (
           <Link href={`/dependencies/projects?project=${projectParam}`} className="flex min-h-9 items-center px-2 text-sm text-gs-gray hover:underline">Clear</Link>
         )}
-        <p className="w-full text-xs text-gs-gray">From / To apply when Due is set to “Custom range”.</p>
-      </form>
+        <p className="w-full text-xs text-gs-gray">Filters apply as you change them. From / To apply when Due is set to “Custom range”.</p>
+      </AutoFilterForm>
 
       {groups.length === 0 ? (
         <p className="mt-6 text-sm text-gs-gray">

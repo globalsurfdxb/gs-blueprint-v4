@@ -1,4 +1,5 @@
 import { SaveButton } from "@/components/save-button";
+import { ActionForm } from "@/components/action-form";
 
 export function MonthlyBriefForm({
   month,
@@ -12,7 +13,7 @@ export function MonthlyBriefForm({
   action: (formData: FormData) => void;
 }) {
   return (
-    <form action={action} className="flex flex-col gap-3">
+    <ActionForm action={action} className="flex flex-col gap-3">
       <input type="hidden" name="month" value={month} />
       <input type="hidden" name="year" value={year} />
       <textarea
@@ -25,6 +26,6 @@ export function MonthlyBriefForm({
       <SaveButton className="btn btn-secondary self-start">
         Save Brief
       </SaveButton>
-    </form>
+    </ActionForm>
   );
 }

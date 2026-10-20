@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageMilestones } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 // Project Milestones (PRD — agency-wide). A flat, manually-managed, ordered checklist per
 // project. All writes gate on canManageMilestones (attached Lead / Cluster Head / Admin / PAM);
@@ -38,6 +39,7 @@ const upsertSchema = z.object({
 });
 
 export async function createMilestone(projectId: string, formData: FormData) {
+  return runAction(async () => {
   await authorizeProject(projectId);
 
   const parsed = upsertSchema.safeParse({ title: formData.get("title"), dueDate: formData.get("dueDate") });
@@ -60,9 +62,11 @@ export async function createMilestone(projectId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${projectId}`);
+  });
 }
 
 export async function updateMilestone(milestoneId: string, formData: FormData) {
+  return runAction(async () => {
   const milestone = await authorizeMilestone(milestoneId);
 
   const parsed = upsertSchema.safeParse({ title: formData.get("title"), dueDate: formData.get("dueDate") });
@@ -74,28 +78,34 @@ export async function updateMilestone(milestoneId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${milestone.projectId}`);
+  });
 }
 
 /** Manual check/uncheck — never computed from task status (PRD guardrail). */
 export async function toggleMilestone(milestoneId: string) {
+  return runAction(async () => {
   const milestone = await authorizeMilestone(milestoneId);
   await prisma.milestone.update({
     where: { id: milestoneId },
     data: { completed: !milestone.completed },
   });
   revalidatePath(`/projects/${milestone.projectId}`);
+  });
 }
 
 export async function deleteMilestone(milestoneId: string) {
+  return runAction(async () => {
   const milestone = await authorizeMilestone(milestoneId);
   await prisma.milestone.delete({ where: { id: milestoneId } });
   revalidatePath(`/projects/${milestone.projectId}`);
+  });
 }
 
 const reorderSchema = z.object({ direction: z.enum(["up", "down"]) });
 
 /** Move a milestone one position up or down by swapping its order with the adjacent one. */
 export async function reorderMilestone(milestoneId: string, formData: FormData) {
+  return runAction(async () => {
   const milestone = await authorizeMilestone(milestoneId);
   const parsed = reorderSchema.safeParse({ direction: formData.get("direction") });
   if (!parsed.success) throw new Error("Invalid input.");
@@ -115,4 +125,5 @@ export async function reorderMilestone(milestoneId: string, formData: FormData) 
   ]);
 
   revalidatePath(`/projects/${milestone.projectId}`);
+  });
 }

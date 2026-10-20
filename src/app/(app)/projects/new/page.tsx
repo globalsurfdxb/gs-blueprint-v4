@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { canCreateProject, getEligibleAccountManagers, isAdmin } from "@/lib/permissions";
+import {
+  canCreateProject,
+  getEligibleAccountManagers,
+  getEligibleDependencyTrackers,
+  isAdmin,
+} from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { createProject } from "@/lib/actions/projects";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -17,7 +22,7 @@ export default async function NewProjectPage() {
   // (and the queries behind them) only apply for Admin.
   const canSetExtras = isAdmin(user);
 
-  const [clients, serviceTypes, allClusters, leadRoles, accountManagers] = await Promise.all([
+  const [clients, serviceTypes, allClusters, leadRoles, accountManagers, dependencyTrackers] = await Promise.all([
     prisma.client.findMany({ orderBy: { name: "asc" } }),
     prisma.serviceType.findMany({ orderBy: { name: "asc" } }),
     prisma.cluster.findMany({ orderBy: { name: "asc" } }),
@@ -29,6 +34,7 @@ export default async function NewProjectPage() {
         })
       : Promise.resolve([]),
     canSetExtras ? getEligibleAccountManagers() : Promise.resolve([]),
+    canSetExtras ? getEligibleDependencyTrackers() : Promise.resolve([]),
   ]);
 
   const clusters = allClusters;
@@ -221,6 +227,29 @@ export default async function NewProjectPage() {
             </select>
             <p className="text-xs text-gs-gray">
               Restricted to Account/Client Services users in the Project Delivery &amp; Client Services cluster.
+            </p>
+          </div>
+        )}
+
+        {canSetExtras && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="dependencyTrackerId" className="text-sm font-medium">
+              Dependency Tracker <span className="text-gs-gray">(optional)</span>
+            </label>
+            <select
+              id="dependencyTrackerId"
+              name="dependencyTrackerId"
+              defaultValue=""
+              className="field"
+            >
+              <option value="">Unassigned</option>
+              {dependencyTrackers.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gs-gray">
+              View-only coordinator — sees only this project&apos;s cross-group-linked tasks (predecessor/successor).
+              Can be changed later from the project page.
             </p>
           </div>
         )}

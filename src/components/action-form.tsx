@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { useFormStatus } from "react-dom";
+import { isFailure, noticeOf, readableError } from "@/lib/action-result";
 import { Spinner } from "@/components/spinner";
 import { useToast } from "@/components/toast";
 
@@ -22,12 +23,18 @@ export function ActionForm({
   action,
   successMessage,
   onSuccess,
+  onSubmit,
   className,
   children,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
-  successMessage: string;
+  // Server actions now RETURN expected failures as { ok: false, error } (see lib/run-action.ts)
+  // instead of throwing, so the return value is inspected below.
+  action: (formData: FormData) => unknown;
+  /** Toast shown on success. Omit for forms that already give their own inline confirmation. */
+  successMessage?: string;
   onSuccess?: () => void;
+  /** Pass-through for e.g. a confirm() guard — call event.preventDefault() to cancel the submit. */
+  onSubmit?: React.FormEventHandler<HTMLFormElement>;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -38,21 +45,30 @@ export function ActionForm({
   const keepFieldsOnce = useRef(false);
 
   async function clientAction(formData: FormData) {
+    let result: unknown;
     try {
-      await action(formData);
+      result = await action(formData);
     } catch (err) {
       if (isControlFlowError(err)) throw err; // let redirect/notFound do their job
       keepFieldsOnce.current = true;
-      addToast(err instanceof Error && err.message ? err.message : "Something went wrong.", "error");
+      addToast(readableError(err), "error");
       return;
     }
-    addToast(successMessage, "success");
+    if (isFailure(result)) {
+      keepFieldsOnce.current = true;
+      addToast(result.error, "error");
+      return;
+    }
+    if (successMessage) addToast(successMessage, "success");
+    const notice = noticeOf(result);
+    if (notice) addToast(notice, "success");
     onSuccess?.();
   }
 
   return (
     <form
       action={clientAction}
+      onSubmit={onSubmit}
       onReset={(e) => {
         if (keepFieldsOnce.current) {
           keepFieldsOnce.current = false;

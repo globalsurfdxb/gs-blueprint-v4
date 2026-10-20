@@ -14,6 +14,7 @@ import {
 import { notifyUsers } from "@/lib/notifications";
 import { subtractWorkingDays } from "@/lib/format";
 import type { Task, TaskGroup, Pod } from "@/generated/prisma/client";
+import { runAction } from "@/lib/run-action";
 
 const handoffSchema = z.object({
   destinationGroupId: z.string().min(1, "Select a destination Task Group."),
@@ -91,6 +92,7 @@ async function createHandoffTask({
  * relying on the DB constraint).
  */
 export async function sendTaskToNextGroup(taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -147,6 +149,7 @@ export async function sendTaskToNextGroup(taskId: string, formData: FormData) {
 
   revalidatePath(`/projects/${task.projectId}`);
   revalidatePath(`/projects/${task.projectId}/tasks/${task.id}`);
+  });
 }
 
 /**
@@ -161,6 +164,7 @@ export async function sendTaskToNextGroup(taskId: string, formData: FormData) {
  * is simply wherever the Predecessor lives.
  */
 export async function rejectAndReturnTask(taskId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -212,6 +216,7 @@ export async function rejectAndReturnTask(taskId: string, _formData: FormData) {
 
   revalidatePath(`/projects/${task.projectId}`);
   revalidatePath(`/projects/${task.projectId}/tasks/${task.id}`);
+  });
 }
 
 /**
@@ -224,6 +229,7 @@ export async function rejectAndReturnTask(taskId: string, _formData: FormData) {
  * auto-calculated the same way.
  */
 export async function approveCalendarHandoffToDesign(taskId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -269,6 +275,7 @@ export async function approveCalendarHandoffToDesign(taskId: string, _formData: 
 
   revalidatePath(`/projects/${task.projectId}`);
   revalidatePath(`/projects/${task.projectId}/tasks/${task.id}`);
+  });
 }
 
 /**
@@ -279,6 +286,7 @@ export async function approveCalendarHandoffToDesign(taskId: string, _formData: 
  * the completed Design task as approved.
  */
 export async function approveCalendarFinalDelivery(taskId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -316,4 +324,5 @@ export async function approveCalendarFinalDelivery(taskId: string, _formData: Fo
   );
 
   revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
+  });
 }

@@ -5,21 +5,35 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canAdvanceTask, canRecordBugVerdict, canToggleHoldTask } from "@/lib/permissions";
 import { notifyUsers } from "@/lib/notifications";
-import type { TaskStatus } from "@/generated/prisma/client";
+import { runAction } from "@/lib/run-action";
+import { computeStatusOptions, explainBlockedMove } from "@/lib/task-status-flow";
+import {
+  hasLoggedTime,
+  logBugStatusEvent,
+  revalidateTaskSurfaces,
+  startTimerFor,
+  stopOpenTimers,
+} from "@/lib/task-activity";
 
-/** Bug-scoped status-change log (PRD 8.2.4 §4): record one row per transition, but ONLY
- * for Bug-type tasks. Standard tasks write nothing — this is deliberately not a general
- * audit log. Records the status the task moved INTO and who did it. */
-async function logBugStatusEvent(task: { id: string; taskType: string }, status: TaskStatus, userId: string) {
-  if (task.taskType !== "BUG") return;
-  await prisma.taskStatusEvent.create({ data: { taskId: task.id, status, changedById: userId } });
+// Every public action returns { ok: false, error } for an expected problem (see lib/run-action.ts),
+// so the plain-language message reaches the browser in production instead of Next.js's generic
+// "Server Components render" text (QA A-01 / E-02). The *Core functions below hold the real logic
+// and are shared with the Kanban drag / drawer dropdown, so those can never do what the same user
+// couldn't do from the task page.
+
+type Done = { ok: true; notice?: string };
+
+async function requireUser() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Your session has expired. Please sign in again.");
+  return user;
 }
 
 async function loadTaskWithGroup(taskId: string) {
   const task = await prisma.task.findUnique({ where: { id: taskId } });
-  if (!task) throw new Error("Task not found.");
+  if (!task) throw new Error("This task no longer exists.");
   const project = await prisma.project.findUnique({ where: { id: task.projectId } });
-  if (!project) throw new Error("Project not found.");
+  if (!project) throw new Error("This task's project no longer exists.");
   const group = task.groupId
     ? await prisma.taskGroup.findUnique({
         where: { id: task.groupId },
@@ -29,46 +43,48 @@ async function loadTaskWithGroup(taskId: string) {
   return { task, project, group };
 }
 
-/** Close any timer still running on a task, stamping the given instant as its end so the
- * logged duration is accurate. Used whenever a task leaves an actively-worked state —
- * Completed (approval) or On Hold (a deliberate pause) — since neither should keep
- * accruing time. */
-async function stopOpenTimers(taskId: string, at: Date) {
-  const openLogs = await prisma.timeLog.findMany({ where: { taskId, endTime: null } });
-  for (const log of openLogs) {
-    await prisma.timeLog.update({
-      where: { id: log.id },
-      data: {
-        endTime: at,
-        durationSeconds: Math.max(0, Math.round((at.getTime() - log.startTime.getTime()) / 1000)),
-      },
-    });
-  }
-}
+// ---------------------------------------------------------------------------------------------
 
-export async function startTask(taskId: string, _formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+async function startTaskCore(taskId: string): Promise<Done> {
+  const user = await requireUser();
   const { task, project } = await loadTaskWithGroup(taskId);
 
-  if (!canAdvanceTask(user, task)) throw new Error("Only the assignee can start this task.");
-  if (task.status !== "NEW") throw new Error("Task is not in New status.");
+  if (!canAdvanceTask(user, task)) throw new Error("Only the person this task is assigned to can start it.");
+  if (task.status !== "NEW") throw new Error("This task has already been started.");
+
+  // Starting a task IS starting work: the assignee's timer starts with it, so status and activity
+  // can't drift apart (QA F-06). A timer running on another task is stopped — and named — so it
+  // never stops silently (QA D-08).
+  let notice: string | undefined;
+  if (user.id === task.assignedToId) {
+    const { stopped } = await startTimerFor(user, task);
+    if (stopped) {
+      notice = `Timer stopped for: ${stopped.name}`;
+      revalidatePath(`/projects/${stopped.projectId}/tasks/${stopped.id}`);
+    }
+  }
 
   await prisma.task.update({ where: { id: taskId }, data: { status: "IN_PROGRESS" } });
   await logBugStatusEvent(task, "IN_PROGRESS", user.id);
-  revalidatePath(`/projects/${project.id}/tasks/${taskId}`);
+  revalidateTaskSurfaces(project.id, taskId);
+  return { ok: true, notice };
 }
 
-export async function submitForReview(taskId: string, _formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+async function submitForReviewCore(taskId: string): Promise<Done> {
+  const user = await requireUser();
   const { task, project, group } = await loadTaskWithGroup(taskId);
 
-  if (!canAdvanceTask(user, task)) throw new Error("Only the assignee can submit this task for review.");
-  if (task.status !== "IN_PROGRESS") throw new Error("Task is not In Progress.");
+  if (!canAdvanceTask(user, task)) throw new Error("Only the person this task is assigned to can submit it for review.");
+  if (task.status !== "IN_PROGRESS") throw new Error("Only a task that is In Progress can be submitted for review.");
+  // Progress is tied to real activity (QA F-06): the assignee can't send untouched work to review.
+  if (user.id === task.assignedToId && !(await hasLoggedTime(taskId))) {
+    throw new Error("Start the timer and log some time on this task before submitting it for review.");
+  }
 
   await prisma.task.update({ where: { id: taskId }, data: { status: "REVIEW" } });
   await logBugStatusEvent(task, "REVIEW", user.id);
+  // The work is handed over, so the assignee's clock stops with it.
+  if (task.assignedToId) await stopOpenTimers(taskId, new Date(), task.assignedToId);
 
   if (group) {
     await notifyUsers([group.leadUserId], {
@@ -79,32 +95,30 @@ export async function submitForReview(taskId: string, _formData: FormData) {
     });
   }
 
-  revalidatePath(`/projects/${project.id}/tasks/${taskId}`);
+  revalidateTaskSurfaces(project.id, taskId);
+  return { ok: true };
 }
 
-export async function approveTask(taskId: string, _formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+async function approveTaskCore(taskId: string): Promise<Done> {
+  const user = await requireUser();
   const { task, project, group } = await loadTaskWithGroup(taskId);
 
   // Bugs (PRD v1.18): a Contributor member of a Bug-Tracking group can close the bug after
   // retesting; the Lead/Admin always can. Standard tasks stay strictly Lead-only.
   const verdictGroup = group ? { ...group, bugTrackingEnabled: group.pod?.bugTrackingEnabled } : null;
   if (!canRecordBugVerdict(user, verdictGroup, task)) {
-    throw new Error("Only this task's group Lead can approve it.");
+    throw new Error("Only the group Lead (or Admin) can complete a task after review.");
   }
-  if (task.status !== "REVIEW") throw new Error("Task is not in Review.");
+  if (task.status !== "REVIEW") throw new Error("Only a task that is in Review can be completed.");
 
   const completedAt = new Date();
   await prisma.task.update({
     where: { id: taskId },
     data: { status: "COMPLETED", completedAt },
   });
-
   await logBugStatusEvent(task, "COMPLETED", user.id);
 
-  // A Completed task can't keep accruing time — auto-stop any timer still running on it
-  // (the assignee may have left it running when the Lead approved the work).
+  // A Completed task can't keep accruing time — auto-stop any timer still running on it.
   await stopOpenTimers(taskId, completedAt);
 
   await notifyUsers([task.createdById, group?.leadUserId], {
@@ -114,34 +128,34 @@ export async function approveTask(taskId: string, _formData: FormData) {
     relatedProjectId: project.id,
   });
 
-  // Content Calendar tasks do NOT auto-forward to Design on this approval — that's the
-  // Content group's own Lead signing off on their team's work, not final clearance. The
-  // project's Social Media Lead (or Admin) still has to explicitly approve the handoff
-  // to Design (see approveCalendarHandoffToDesign) before it moves on.
-  revalidatePath(`/projects/${project.id}/tasks/${taskId}`);
+  // Content Calendar tasks do NOT auto-forward to Design on this approval — that's the Content
+  // group's own Lead signing off on their team's work, not final clearance (see
+  // approveCalendarHandoffToDesign).
+  revalidateTaskSurfaces(project.id, taskId);
+  return { ok: true };
 }
 
-export async function sendToRevision(taskId: string, _formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+async function sendToRevisionCore(taskId: string): Promise<Done> {
+  const user = await requireUser();
   const { task, project, group } = await loadTaskWithGroup(taskId);
 
   // Bugs (PRD v1.18): a Contributor member of a Bug-Tracking group can reopen the bug after a
   // failed retest; the Lead/Admin always can. Standard tasks stay strictly Lead-only.
   const verdictGroup = group ? { ...group, bugTrackingEnabled: group.pod?.bugTrackingEnabled } : null;
   if (!canRecordBugVerdict(user, verdictGroup, task)) {
-    throw new Error("Only this task's group Lead can send it to revision.");
+    throw new Error("Only the group Lead (or Admin) can send a task back for revision.");
   }
-  if (task.status !== "REVIEW") throw new Error("Task is not in Review.");
+  if (task.status !== "REVIEW") throw new Error("Only a task that is in Review can be sent back for revision.");
 
-  // Revision is momentary by design (PRD 8.3): increment the count and land back
-  // in In Progress in the same operation, rather than resting in a REVISION status.
+  // Revision is momentary by design (PRD 8.3): increment the count and land back in
+  // In Progress in the same operation, rather than resting in a REVISION status. The assignee
+  // can start the timer again to pick the work back up (QA F-06).
   await prisma.task.update({
     where: { id: taskId },
     data: { status: "IN_PROGRESS", revisionCount: { increment: 1 } },
   });
   // For a Bug this is the "Reopened" moment — logged as REVISION even though the task then
-  // rests in In Progress (revision is momentary; the Reopen Count captures the tally).
+  // rests in In Progress (the Reopen Count captures the tally).
   await logBugStatusEvent(task, "REVISION", user.id);
 
   if (group) {
@@ -153,19 +167,19 @@ export async function sendToRevision(taskId: string, _formData: FormData) {
     });
   }
 
-  revalidatePath(`/projects/${project.id}/tasks/${taskId}`);
+  revalidateTaskSurfaces(project.id, taskId);
+  return { ok: true };
 }
 
 const HOLDABLE_STATUSES = ["NEW", "IN_PROGRESS", "REVIEW"] as const;
 
-export async function putTaskOnHold(taskId: string, _formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+async function putTaskOnHoldCore(taskId: string): Promise<Done> {
+  const user = await requireUser();
   const { task, project, group } = await loadTaskWithGroup(taskId);
 
-  if (!canToggleHoldTask(user, group)) throw new Error("Only this task's group Lead can put it on hold.");
-  if (!HOLDABLE_STATUSES.includes(task.status as typeof HOLDABLE_STATUSES[number])) {
-    throw new Error("Task can't be put on hold from its current status.");
+  if (!canToggleHoldTask(user, group)) throw new Error("Only the group Lead (or Admin) can put a task on hold.");
+  if (!HOLDABLE_STATUSES.includes(task.status as (typeof HOLDABLE_STATUSES)[number])) {
+    throw new Error("A task can only be put on hold while it is New, In Progress or in Review.");
   }
 
   await prisma.task.update({
@@ -175,65 +189,98 @@ export async function putTaskOnHold(taskId: string, _formData: FormData) {
   await logBugStatusEvent(task, "ON_HOLD", user.id);
 
   // On Hold is a deliberate pause — a paused task shouldn't keep the clock running.
-  // Any running timer stops now; the assignee starts a fresh one when work resumes.
   await stopOpenTimers(taskId, new Date());
 
-  revalidatePath(`/projects/${project.id}/tasks/${taskId}`);
+  revalidateTaskSurfaces(project.id, taskId);
+  return { ok: true };
 }
 
-export async function resumeTaskFromHold(taskId: string, _formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+async function resumeTaskFromHoldCore(taskId: string): Promise<Done> {
+  const user = await requireUser();
   const { task, project, group } = await loadTaskWithGroup(taskId);
 
-  if (!canToggleHoldTask(user, group)) throw new Error("Only this task's group Lead can resume it.");
-  if (task.status !== "ON_HOLD" || !task.onHoldFromStatus) {
-    throw new Error("Task is not on hold.");
-  }
+  if (!canToggleHoldTask(user, group)) throw new Error("Only the group Lead (or Admin) can resume a task.");
+  if (task.status !== "ON_HOLD" || !task.onHoldFromStatus) throw new Error("This task is not on hold.");
 
   await prisma.task.update({
     where: { id: taskId },
     data: { status: task.onHoldFromStatus, onHoldFromStatus: null },
   });
   await logBugStatusEvent(task, task.onHoldFromStatus, user.id);
-  revalidatePath(`/projects/${project.id}/tasks/${taskId}`);
+  revalidateTaskSurfaces(project.id, taskId);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Public actions
+
+export async function startTask(taskId: string, _formData: FormData) {
+  return runAction(() => startTaskCore(taskId));
+}
+
+export async function submitForReview(taskId: string, _formData: FormData) {
+  return runAction(() => submitForReviewCore(taskId));
+}
+
+export async function approveTask(taskId: string, _formData: FormData) {
+  return runAction(() => approveTaskCore(taskId));
+}
+
+export async function sendToRevision(taskId: string, _formData: FormData) {
+  return runAction(() => sendToRevisionCore(taskId));
+}
+
+export async function putTaskOnHold(taskId: string, _formData: FormData) {
+  return runAction(() => putTaskOnHoldCore(taskId));
+}
+
+export async function resumeTaskFromHold(taskId: string, _formData: FormData) {
+  return runAction(() => resumeTaskFromHoldCore(taskId));
 }
 
 /**
- * Kanban drag-and-drop (PRD 8.11) is NOT a new status path — it's a thin adapter that maps a
- * card moving between columns onto the SAME transition actions the list/detail view already
- * uses, so every permission and status guard is enforced in exactly one place. Only the four
- * moves that correspond to a real transition are accepted; any other drag (backward, skipping
- * a step, out of On Hold, an unknown column) is rejected here and the card snaps back. The
- * called action re-checks authority (assignee to advance; Lead/Admin — or a bug Contributor —
- * to approve/reopen), so a drag can never do something the same user couldn't do from the list.
+ * Status change from the quick-edit drawer's dropdown and the Kanban drag-and-drop. It is NOT a
+ * separate status path — it validates the move against the SAME options the UI offers
+ * (computeStatusOptions) and then runs the same core transition, so a drag or dropdown can never
+ * do something the same user couldn't do from the task page. A move that isn't allowed comes back
+ * as a plain-language `{ ok: false, error }` (QA A-01, A-04, B-02, E-02).
  *
- * `surfacePath` is the board's own route (e.g. /projects/<id> or /my-tasks) so it re-renders
- * after the move — the underlying action already revalidates the task's detail page.
+ * `surfacePath` is the board's own route (e.g. /projects/<id> or /my-tasks) so it re-renders.
  */
 export async function changeTaskStatusByDrag(taskId: string, targetStatus: string, surfacePath: string) {
-  const { task } = await loadTaskWithGroup(taskId);
-  const move = `${task.status}->${targetStatus}`;
-  const formData = new FormData();
+  return runAction(async (): Promise<Done> => {
+    const user = await requireUser();
+    const { task, group } = await loadTaskWithGroup(taskId);
+    const timeLogged = await hasLoggedTime(taskId);
 
-  switch (move) {
-    case "NEW->IN_PROGRESS":
-      await startTask(taskId, formData);
-      break;
-    case "IN_PROGRESS->REVIEW":
-      await submitForReview(taskId, formData);
-      break;
-    case "REVIEW->COMPLETED":
-      await approveTask(taskId, formData);
-      break;
-    // Dragging a card in Review back to In Progress is a reject/reopen — the same
-    // momentary Revision transition (Reopen for a Bug), which lands back in In Progress.
-    case "REVIEW->IN_PROGRESS":
-      await sendToRevision(taskId, formData);
-      break;
-    default:
-      throw new Error("That isn't a valid status move — drop it on the next step in the workflow.");
-  }
+    const allowed = computeStatusOptions({ user, task, group, hasLoggedTime: timeLogged }).find(
+      (o) => o.value === targetStatus && o.value !== task.status && !o.disabled,
+    );
+    if (!allowed) {
+      throw new Error(explainBlockedMove({ user, task, group, target: targetStatus, hasLoggedTime: timeLogged }));
+    }
 
-  revalidatePath(surfacePath);
+    let result: Done;
+    switch (`${task.status}->${targetStatus}`) {
+      case "NEW->IN_PROGRESS":
+        result = await startTaskCore(taskId);
+        break;
+      case "IN_PROGRESS->REVIEW":
+        result = await submitForReviewCore(taskId);
+        break;
+      case "REVIEW->COMPLETED":
+        result = await approveTaskCore(taskId);
+        break;
+      // A card in Review dragged back to In Progress is a send-back / reopen — the same
+      // momentary Revision transition (Reopen for a Bug), which lands back in In Progress.
+      case "REVIEW->IN_PROGRESS":
+        result = await sendToRevisionCore(taskId);
+        break;
+      default:
+        throw new Error("Tasks move one step at a time: New → In Progress → Review → Completed.");
+    }
+
+    revalidatePath(surfacePath);
+    return result;
+  });
 }

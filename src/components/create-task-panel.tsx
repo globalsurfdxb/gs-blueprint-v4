@@ -17,8 +17,24 @@ const fieldClass =
  * assignee pool, bug fields and Sprint field are all driven by the server-resolved options for the
  * selected project — the write goes through createTaskInDrawer, which re-checks every rule.
  */
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium uppercase tracking-wide text-gs-gray">{label}</span>
+      <div
+        className="rounded-md border border-gs-gray/20 bg-gs-light px-3 py-2 text-sm text-gs-black/80"
+        aria-readonly="true"
+        title="Fixed — this task is being created in the selected project"
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
 export function CreateTaskPanel({
   projects,
+  projectLocked,
   options,
   loading,
   initialGroupId,
@@ -27,6 +43,8 @@ export function CreateTaskPanel({
   onCreated,
 }: {
   projects: { id: string; name: string; clientName: string }[] | null;
+  /** True when opened from inside a project — Project Name and Cluster render as fixed fields. */
+  projectLocked: boolean;
   options: TaskCreateOptions | null;
   loading: boolean;
   initialGroupId: string | null;
@@ -41,27 +59,39 @@ export function CreateTaskPanel({
         <div className="sticky top-0 flex items-start justify-between gap-3 border-b border-gs-gray/15 bg-white px-5 py-4">
           <div className="flex-1">
             <h2 className="text-base font-semibold">New Task</h2>
-            {/* Project picker — a proper dropdown, never a raw id. Switching re-loads that project's
-                groups/assignees. */}
-            <div className="mt-2 flex flex-col gap-1">
-              <label htmlFor="create-project" className="text-xs font-medium uppercase tracking-wide text-gs-gray">
-                Project
-              </label>
-              {projects && projects.length > 0 ? (
-                <select
-                  id="create-project"
-                  value={options?.projectId ?? ""}
-                  onChange={(e) => onProjectChange(e.target.value)}
-                  className={fieldClass}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} · {p.clientName}</option>
-                  ))}
-                </select>
-              ) : (
-                <p className="text-sm">{options ? `${options.projectName} · ${options.clientName}` : "…"}</p>
-              )}
-            </div>
+            {projectLocked ? (
+              // Created from inside a project: Project Name and Cluster are fixed context, not
+              // choices — shown read-only so the task can't be filed somewhere else by mistake.
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <ReadOnlyField label="Project Name" value={options ? options.projectName : "…"} />
+                <ReadOnlyField label="Cluster" value={options ? options.clusterName : "…"} />
+              </div>
+            ) : (
+              // Cross-project surface (My Tasks): a dropdown of the user's own projects; switching
+              // re-loads that project's groups/assignees. Cluster follows the chosen project.
+              <div className="mt-2 flex flex-col gap-2">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="create-project" className="text-xs font-medium uppercase tracking-wide text-gs-gray">
+                    Project
+                  </label>
+                  {projects && projects.length > 0 ? (
+                    <select
+                      id="create-project"
+                      value={options?.projectId ?? ""}
+                      onChange={(e) => onProjectChange(e.target.value)}
+                      className={fieldClass}
+                    >
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} · {p.clientName}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-sm">{options ? `${options.projectName} · ${options.clientName}` : "…"}</p>
+                  )}
+                </div>
+                {options && <ReadOnlyField label="Cluster" value={options.clusterName} />}
+              </div>
+            )}
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="shrink-0 text-lg leading-none text-gs-gray hover:text-gs-black">✕</button>
         </div>
@@ -162,6 +192,11 @@ function CreateForm({
                   <option key={s.id} value={s.id}>{s.name}{s.status === "ACTIVE" ? " · Active" : ""}</option>
                 ))}
               </select>
+              {selectedGroup.sprints.length === 0 && (
+                <p className="text-xs text-gs-gray">
+                  No open sprints on this project yet — a Lead creates one from the project page, then tasks can be added to it.
+                </p>
+              )}
             </div>
           )}
 

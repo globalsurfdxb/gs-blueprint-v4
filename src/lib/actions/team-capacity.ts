@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canSetTeamCapacity } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 // Team Capacity (hrs/wk) — a static planned-capacity number at the Task Group level, for
 // Development/QA teams only (PRD Agile Sprint enhancement). Admin/Cluster Head only. Blank
@@ -22,6 +23,7 @@ const schema = z.object({
 });
 
 export async function setTeamCapacity(groupId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -48,4 +50,5 @@ export async function setTeamCapacity(groupId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${group.projectId}`);
+  });
 }

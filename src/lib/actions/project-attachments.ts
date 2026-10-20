@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewProject, isAdmin } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 const attachmentSchema = z.object({
   url: z.string().url("Enter a valid URL."),
@@ -12,6 +13,7 @@ const attachmentSchema = z.object({
 });
 
 export async function addProjectAttachment(projectId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -35,6 +37,7 @@ export async function addProjectAttachment(projectId: string, formData: FormData
   });
 
   revalidatePath(`/projects/${projectId}`);
+  });
 }
 
 export async function editProjectAttachment(
@@ -42,6 +45,7 @@ export async function editProjectAttachment(
   attachmentId: string,
   formData: FormData,
 ) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -61,6 +65,7 @@ export async function editProjectAttachment(
   });
 
   revalidatePath(`/projects/${projectId}`);
+  });
 }
 
 export async function deleteProjectAttachment(
@@ -68,10 +73,20 @@ export async function deleteProjectAttachment(
   attachmentId: string,
   _formData: FormData,
 ) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
-  if (!isAdmin(user)) throw new Error("Only an Admin can delete attachments.");
+  const attachment = await prisma.projectAttachment.findUnique({
+    where: { id: attachmentId },
+    select: { addedById: true, projectId: true },
+  });
+  if (!attachment || attachment.projectId !== projectId) throw new Error("This link no longer exists.");
+  // The person who added a link can remove it; an Admin can remove any (QA A-07).
+  if (!isAdmin(user) && attachment.addedById !== user.id) {
+    throw new Error("Only the person who added this link, or an Admin, can delete it.");
+  }
 
   await prisma.projectAttachment.delete({ where: { id: attachmentId } });
   revalidatePath(`/projects/${projectId}`);
+  });
 }

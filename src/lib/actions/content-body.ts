@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canEditContentBody, canManageContentBody } from "@/lib/permissions";
 import { sanitizeContentBody, isEmptyContentBody, MAX_CONTENT_BODY_CHARS } from "@/lib/content-body";
+import { runAction } from "@/lib/run-action";
 
 // Generous raw-input ceiling before sanitizing — real copy is well under this; the cap just
 // stops a pathological payload from reaching the sanitizer.
@@ -19,6 +20,7 @@ const MAX_RAW_CHARS = MAX_CONTENT_BODY_CHARS * 4;
  * overwrites — there is no version history (Revision Count conveys the feedback rounds).
  */
 export async function updateContentBody(projectId: string, taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -51,6 +53,7 @@ export async function updateContentBody(projectId: string, taskId: string, formD
 
   await prisma.task.update({ where: { id: taskId }, data: { contentBody: value } });
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }
 
 const podToggleSchema = z.object({
@@ -60,6 +63,7 @@ const podToggleSchema = z.object({
 
 /** Toggle the Content Body field for one discipline (pod) — Admin only (PRD 8.12). */
 export async function setPodContentBody(formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user || !canManageContentBody(user)) {
     throw new Error("Only an Admin can manage Content Body settings.");
@@ -77,4 +81,5 @@ export async function setPodContentBody(formData: FormData) {
   });
 
   revalidatePath("/admin/content-body");
+  });
 }

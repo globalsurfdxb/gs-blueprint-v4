@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canEditTaskAttributes } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 // Post-creation edits to a task's planning attributes — Priority and (for Bugs) Severity —
 // introduced with the Dev/QA quick-edit drawer (PRD Agile Sprint enhancement). Gated by
@@ -26,6 +27,7 @@ async function loadTaskForAttrEdit(taskId: string) {
 const prioritySchema = z.object({ priority: z.enum(PRIORITY_VALUES) });
 
 export async function setTaskPriority(taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -41,11 +43,13 @@ export async function setTaskPriority(taskId: string, formData: FormData) {
 
   revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
   revalidatePath(`/projects/${task.projectId}`);
+  });
 }
 
 const severitySchema = z.object({ severity: z.enum(SEVERITY_VALUES) });
 
 export async function setTaskSeverity(taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -64,4 +68,5 @@ export async function setTaskSeverity(taskId: string, formData: FormData) {
 
   revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
   revalidatePath(`/projects/${task.projectId}`);
+  });
 }

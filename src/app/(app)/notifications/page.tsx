@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { markNotificationRead, markAllNotificationsRead } from "@/lib/actions/notifications";
 import { formatDateTime } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
+import { ActionForm } from "@/components/action-form";
 
 export default async function NotificationsPage() {
   const user = await getCurrentUser();
@@ -24,11 +25,11 @@ export default async function NotificationsPage() {
         title="Notifications"
         actions={<>
           {hasUnread && (
-          <form action={markAllNotificationsRead}>
+          <ActionForm action={markAllNotificationsRead}>
             <button type="submit" className="flex min-h-11 items-center text-sm font-medium text-gs-red hover:underline">
               Mark all as read
             </button>
-          </form>
+          </ActionForm>
         )}
         </>}
       />
@@ -64,14 +65,14 @@ export default async function NotificationsPage() {
                 )}
               </div>
               {!n.isRead && (
-                <form action={markReadWithId}>
+                <ActionForm action={markReadWithId}>
                   <button
                     type="submit"
                     className="ml-3 flex min-h-11 shrink-0 items-center text-xs text-gs-gray hover:text-gs-black"
                   >
                     Mark read
                   </button>
-                </form>
+                </ActionForm>
               )}
             </div>
           );

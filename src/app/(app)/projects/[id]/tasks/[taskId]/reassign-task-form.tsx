@@ -39,13 +39,15 @@ export function ReassignTaskForm({
           <select
             name="assignedToId"
             required
-            defaultValue={currentAssignedToId ?? ""}
+            defaultValue=""
             className="field"
           >
-            <option value="" disabled>Select one person</option>
-            {assignees.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
+            <option value="" disabled>Select a different person</option>
+            {assignees
+              .filter((a) => a.id !== currentAssignedToId)
+              .map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
           </select>
         </div>
         <SubmitButton
@@ -56,8 +58,8 @@ export function ReassignTaskForm({
         </SubmitButton>
         <p className="w-full text-xs text-gs-gray">
           {bugMode
-            ? "Hand this bug to another member of your team to work next — or pick yourself to keep it."
-            : "Delegate this task to a member of your group, or keep it and pick yourself."}
+            ? "Hand this bug to another member of your team to work next. To send it back to the same person, use Reopen."
+            : "Delegate this task to a different member of your group. To send it back to the same person, use Send to Revision."}
         </p>
       </ActionForm>
     </details>

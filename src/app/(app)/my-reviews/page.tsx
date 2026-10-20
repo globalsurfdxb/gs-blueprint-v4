@@ -6,11 +6,38 @@ import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { daysOverdue } from "@/lib/timezone";
 import { PageHeader } from "@/components/page-header";
+import { AutoFilterForm } from "@/components/auto-filter-form";
+import { TaskStatusChip } from "@/components/task-chips";
+import { statusLabel } from "@/lib/bug";
 
-export default async function MyReviewsPage() {
+// The lens the page is shown through. "action" is the original queue (submitted for review, or
+// unassigned); the rest are the filtered lists the Lead dashboard's cards open (QA F-02), plus a
+// Completed list so finished work doesn't vanish from a Lead's views (QA F-04).
+const VIEWS = {
+  action: "Needs my action",
+  unassigned: "Unassigned",
+  overdue: "Overdue",
+  flagged: "Revision-flagged (2+ revisions)",
+  completed: "Completed (last 30 days)",
+} as const;
+type ViewKey = keyof typeof VIEWS;
+
+const COMPLETED_WINDOW_DAYS = 30;
+const FALLBACK_LOCATION = "DUBAI";
+
+const taskInclude = { project: { include: { client: true } }, assignedTo: true, parentTask: true } as const;
+
+export default async function MyReviewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!isLead(user)) redirect("/");
+
+  const { view: viewParam = "" } = await searchParams;
+  const view: ViewKey = viewParam in VIEWS ? (viewParam as ViewKey) : "action";
 
   const now = new Date();
 
@@ -21,15 +48,41 @@ export default async function MyReviewsPage() {
   // a Contributor) before anyone can act on it, and today that's only ever surfaced by a
   // one-time notification. A missed notification left it invisible until someone happened
   // to open the project's Task Groups view, so it belongs in this queue too.
-  const tasks = await prisma.task.findMany({
-    where: {
-      group: { leadUserId: user.id },
-      project: { status: { not: "COMPLETED" }, archivedAt: null },
-      OR: [{ status: "REVIEW" }, { assignedToId: null, status: { not: "COMPLETED" } }],
-    },
-    include: { project: { include: { client: true } }, assignedTo: true, parentTask: true },
-    orderBy: { dueDate: "asc" },
-  });
+  const baseWhere = {
+    group: { leadUserId: user.id },
+    project: { status: { not: "COMPLETED" as const }, archivedAt: null },
+  };
+  const loadTasks = (where: object, orderBy: object) =>
+    prisma.task.findMany({ where: { ...baseWhere, ...where }, include: taskInclude, orderBy });
+
+  let tasks: Awaited<ReturnType<typeof loadTasks>>;
+  if (view === "action") {
+    tasks = await loadTasks(
+      { OR: [{ status: "REVIEW" }, { assignedToId: null, status: { not: "COMPLETED" } }] },
+      { dueDate: "asc" },
+    );
+  } else if (view === "completed") {
+    const since = new Date(now.getTime() - COMPLETED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    tasks = await loadTasks(
+      { parentTaskId: null, status: "COMPLETED", completedAt: { gte: since } },
+      { completedAt: "desc" },
+    );
+  } else {
+    // Same population and the same tests as the dashboard cards (top-level, still-open tasks),
+    // so the number on a card always equals the rows it opens.
+    const open = await loadTasks({ parentTaskId: null, status: { not: "COMPLETED" } }, { dueDate: "asc" });
+    tasks = open.filter((t) => {
+      if (view === "unassigned") return t.assignedToId === null;
+      if (view === "flagged") return t.revisionCount >= 2;
+      const late = daysOverdue(t.dueDate, t.assignedTo?.location ?? FALLBACK_LOCATION, now);
+      return t.status !== "ON_HOLD" && late !== null && late > 0;
+    });
+  }
+
+  // A Lead an Admin has restricted to their own tasks never sees teammates' work here either.
+  if (user.restrictToOwnTasks) {
+    tasks = tasks.filter((t) => t.assignedToId === user.id || t.createdById === user.id);
+  }
 
   const groups = new Map<string, { project: (typeof tasks)[number]["project"]; tasks: typeof tasks }>();
   for (const t of tasks) {
@@ -57,7 +110,8 @@ export default async function MyReviewsPage() {
   const calendarProjectIds = socialMediaGroups.map((g) => g.projectId);
 
   let calendarPending: ((typeof tasks)[number] & { calendarStage: "content" | "design" })[] = [];
-  if (calendarProjectIds.length > 0) {
+  // Approval checkpoints belong to the action queue only, not the filtered lists.
+  if (view === "action" && !user.restrictToOwnTasks && calendarProjectIds.length > 0) {
     const contentCandidates = await prisma.task.findMany({
       where: {
         projectId: { in: calendarProjectIds },
@@ -114,10 +168,22 @@ export default async function MyReviewsPage() {
         description={<>
 Work submitted for your review, or still unassigned, across every project you lead a Task Group on.
 </>}
+        actions={
+          <AutoFilterForm className="flex items-center gap-2">
+            <label htmlFor="view" className="text-xs font-medium text-gs-gray">Show</label>
+            <select id="view" name="view" defaultValue={view} className="field field-sm">
+              {Object.entries(VIEWS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </AutoFilterForm>
+        }
       />
 
       {groups.size === 0 && calendarGroups.size === 0 && (
-        <p className="mt-6 text-sm text-gs-gray">Nothing waiting on your review.</p>
+        <p className="mt-6 text-sm text-gs-gray">
+          {view === "action" ? "Nothing waiting on your review." : `No tasks to show for “${VIEWS[view]}”.`}
+        </p>
       )}
 
       {calendarGroups.size > 0 && (
@@ -179,6 +245,7 @@ Work submitted for your review, or still unassigned, across every project you le
                       <th className="whitespace-nowrap px-4 py-3">Task</th>
                       <th className="whitespace-nowrap px-4 py-3">Assignee</th>
                       <th className="whitespace-nowrap px-4 py-3">Due Date</th>
+                      <th className="whitespace-nowrap px-4 py-3">Status</th>
                       <th className="whitespace-nowrap px-4 py-3">Priority</th>
                       <th className="whitespace-nowrap px-4 py-3">Revisions</th>
                     </tr>
@@ -207,6 +274,9 @@ Work submitted for your review, or still unassigned, across every project you le
                                 ({late} day{late === 1 ? "" : "s"})
                               </span>
                             )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <TaskStatusChip status={t.status} label={statusLabel(t.status, t.taskType)} />
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{t.priority}</td>
                           <td className="px-4 py-3">

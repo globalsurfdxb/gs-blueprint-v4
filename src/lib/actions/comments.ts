@@ -6,10 +6,12 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewTask, isAdmin } from "@/lib/permissions";
 import { notifyUsers } from "@/lib/notifications";
+import { runAction } from "@/lib/run-action";
 
 const commentSchema = z.object({ text: z.string().min(1, "Comment can't be empty.") });
 
 export async function addComment(projectId: string, taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -48,9 +50,11 @@ export async function addComment(projectId: string, taskId: string, formData: Fo
 
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
   return comment;
+  });
 }
 
 export async function editComment(projectId: string, taskId: string, commentId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -67,13 +71,16 @@ export async function editComment(projectId: string, taskId: string, commentId: 
   });
 
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }
 
 export async function deleteComment(projectId: string, taskId: string, commentId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
   if (!isAdmin(user)) throw new Error("Only an Admin can delete comments.");
 
   await prisma.comment.delete({ where: { id: commentId } });
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }

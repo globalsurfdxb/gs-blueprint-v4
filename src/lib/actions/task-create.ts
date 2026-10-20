@@ -6,13 +6,16 @@ import {
   canCreateTaskInGroup,
   canSelfCreateInGroup,
   canAssignAnyoneInGroup,
-  canManageSprints,
 } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 // Read-side data for the unified create drawer (final build). Everything the create form needs is
 // resolved server-side here — the SAME rules the former full-page create flow used — so the client only
 // renders already-authorized options and never decides who may create or assign. The write still
 // goes through createTaskInDrawer → createTaskCore, which re-checks every rule.
+//
+// Both fetchers return `{ ok: false, error }` instead of throwing so a problem reaches the browser as
+// a readable message in production (QA E-02).
 
 export type CreateAssignee = { id: string; name: string };
 
@@ -37,12 +40,14 @@ export type TaskCreateOptions = {
   projectId: string;
   projectName: string;
   clientName: string;
+  clusterName: string;
   groups: CreateGroupOption[];
 };
 
 // The include shape the creation permission helpers expect.
 const projectInclude = {
   client: { select: { name: true } },
+  cluster: { select: { name: true } },
   taskGroups: {
     include: {
       lead: true,
@@ -51,41 +56,65 @@ const projectInclude = {
   },
 } as const;
 
-/** Projects the current user may create a task in — for the drawer's Project picker. */
-export async function getCreatableProjects(): Promise<{ id: string; name: string; clientName: string }[]> {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+/**
+ * Projects the current user may create a task in — for the drawer's Project picker. Only projects
+ * the user is actually attached to appear (QA B-01): Admin sees all; a Lead/Account Manager/Cluster
+ * Head sees the projects they lead or oversee; a Contributor sees the projects they have work on.
+ */
+export async function getCreatableProjects() {
+  return runAction(async () => {
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Your session has expired. Please sign in again.");
 
-  const projects = await prisma.project.findMany({
-    where: { archivedAt: null },
-    include: projectInclude,
-    orderBy: { name: "asc" },
+    const projects = await prisma.project.findMany({
+      where: { archivedAt: null },
+      include: projectInclude,
+      orderBy: { name: "asc" },
+    });
+
+    // Projects where this user has at least one task assigned — the Contributor's "assigned" set.
+    const workedOn = new Set(
+      (
+        await prisma.task.findMany({
+          where: { assignedToId: user.id },
+          select: { projectId: true },
+          distinct: ["projectId"],
+        })
+      ).map((t) => t.projectId),
+    );
+
+    return projects
+      .filter(
+        (p) =>
+          canCreateTaskInGroup(user, p) ||
+          (workedOn.has(p.id) && p.taskGroups.some((g) => canSelfCreateInGroup(user, g))),
+      )
+      .map((p) => ({ id: p.id, name: p.name, clientName: p.client.name }));
   });
-
-  return projects
-    .filter(
-      (p) => canCreateTaskInGroup(user, p) || p.taskGroups.some((g) => canSelfCreateInGroup(user, g)),
-    )
-    .map((p) => ({ id: p.id, name: p.name, clientName: p.client.name }));
 }
 
 /** Per-group create options for one project (eligible groups, assignee pools, sprint field). */
-export async function getTaskCreateOptions(projectId: string): Promise<TaskCreateOptions> {
+export async function getTaskCreateOptions(projectId: string) {
+  return runAction(() => loadTaskCreateOptions(projectId));
+}
+
+async function loadTaskCreateOptions(projectId: string): Promise<TaskCreateOptions> {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+  if (!user) throw new Error("Your session has expired. Please sign in again.");
 
   const project = await prisma.project.findUnique({ where: { id: projectId }, include: projectInclude });
-  if (!project) throw new Error("Project not found.");
+  if (!project) throw new Error("This project no longer exists.");
 
   const privileged = canCreateTaskInGroup(user, project);
   const eligibleGroups = privileged
     ? project.taskGroups
     : project.taskGroups.filter((g) => canSelfCreateInGroup(user, g));
 
+  // Whoever can create a task here may place their OWN new task in a Sprint (QA A-03), so the
+  // sprint list is loaded whenever a sprint-enabled group is eligible.
   const sprintEnabledGroups = project.taskGroups.filter((g) => g.pod?.sprintWorkflowEnabled);
-  const canManageSprintHere = canManageSprints(user, project, sprintEnabledGroups);
   const sprints =
-    sprintEnabledGroups.length > 0 && canManageSprintHere
+    sprintEnabledGroups.length > 0
       ? await prisma.sprint.findMany({
           where: { projectId, status: { not: "COMPLETED" } },
           orderBy: [{ status: "asc" }, { startDate: "asc" }],
@@ -127,7 +156,7 @@ export async function getTaskCreateOptions(projectId: string): Promise<TaskCreat
       assigneeLocked = false;
     }
 
-    const canManageSprint = !!g.pod?.sprintWorkflowEnabled && canManageSprintHere;
+    const canPlaceInSprint = !!g.pod?.sprintWorkflowEnabled;
     groups.push({
       id: g.id,
       name: g.name,
@@ -135,10 +164,10 @@ export async function getTaskCreateOptions(projectId: string): Promise<TaskCreat
       leadName: g.lead.name,
       bugTrackingEnabled: !!g.pod?.bugTrackingEnabled,
       sprintWorkflowEnabled: !!g.pod?.sprintWorkflowEnabled,
-      canManageSprint,
+      canManageSprint: canPlaceInSprint,
       assignees,
       assigneeLocked,
-      sprints: canManageSprint ? sprints : [],
+      sprints: canPlaceInSprint ? sprints : [],
     });
   }
 
@@ -146,6 +175,7 @@ export async function getTaskCreateOptions(projectId: string): Promise<TaskCreat
     projectId: project.id,
     projectName: project.name,
     clientName: project.client.name,
+    clusterName: project.cluster.name,
     groups,
   };
 }

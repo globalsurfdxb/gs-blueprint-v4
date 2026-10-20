@@ -13,6 +13,7 @@ import { addComment } from "@/lib/actions/comments";
 import { getCreatableProjects, getTaskCreateOptions, type TaskCreateOptions } from "@/lib/actions/task-create";
 import { CreateTaskPanel } from "@/components/create-task-panel";
 import { formatLocalDate, formatLocalTime } from "@/lib/timezone";
+import { isFailure, noticeOf, readableError } from "@/lib/action-result";
 
 // Quick-edit task drawer. A right-side slide-over rendered over the current view — opening it
 // does NOT navigate, so the underlying view's scroll position and filters are preserved. Inline
@@ -36,15 +37,6 @@ export function useTaskDrawer(): DrawerApi | null {
   return useContext(TaskDrawerContext);
 }
 
-const STATUS_TARGETS = ["NEW", "IN_PROGRESS", "REVIEW", "COMPLETED"] as const;
-const STATUS_LABELS: Record<string, string> = {
-  NEW: "New",
-  IN_PROGRESS: "In Progress",
-  REVIEW: "Review",
-  REVISION: "Revision",
-  ON_HOLD: "On Hold",
-  COMPLETED: "Completed",
-};
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
 const PRIORITY_LABELS: Record<string, string> = { LOW: "Low", MEDIUM: "Medium", HIGH: "High", URGENT: "Urgent" };
@@ -79,6 +71,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
   const [createProjects, setCreateProjects] = useState<{ id: string; name: string; clientName: string }[] | null>(null);
   const [createInitialGroupId, setCreateInitialGroupId] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
+  const [createProjectLocked, setCreateProjectLocked] = useState(false);
   const { addToast } = useToast();
   const router = useRouter();
 
@@ -86,9 +79,15 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
     async (id: string) => {
       setLoading(true);
       try {
-        setData(await getTaskDrawerData(id));
+        const result = await getTaskDrawerData(id);
+        if (isFailure(result)) {
+          addToast(result.error, "error");
+          setTaskId(null);
+        } else {
+          setData(result);
+        }
       } catch (e) {
-        addToast(e instanceof Error ? e.message : "Couldn't load that task.", "error");
+        addToast(readableError(e), "error");
         setTaskId(null);
       } finally {
         setLoading(false);
@@ -119,36 +118,53 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
     setCreateInitialGroupId(null);
   }, []);
 
+  // Opened from inside a project (projectId given): the task belongs to THAT project, so the panel
+  // shows Project Name and Cluster as fixed, read-only fields. Opened from a cross-project surface
+  // (My Tasks): a picker limited to the user's own projects.
   const openCreate = useCallback(
     (projectId?: string, groupId?: string) => {
       setTaskId(null);
       setData(null);
       setCreating(true);
+      setCreateProjectLocked(!!projectId);
       setCreateInitialGroupId(groupId ?? null);
       setCreateOptions(null);
+      setCreateProjects(null);
       setCreateLoading(true);
       void (async () => {
         try {
-          const projectsPromise = createProjects ? Promise.resolve(createProjects) : getCreatableProjects();
           let pid = projectId;
           if (!pid) {
-            const projs = await projectsPromise;
+            const projs = await getCreatableProjects();
+            if (isFailure(projs)) {
+              addToast(projs.error, "error");
+              setCreating(false);
+              return;
+            }
             setCreateProjects(projs);
             pid = projs[0]?.id;
-            if (!pid) return; // nothing this user can create in
-          } else {
-            void projectsPromise.then(setCreateProjects).catch(() => {});
+            if (!pid) {
+              addToast("You aren't assigned to any project you can add a task to yet.", "error");
+              setCreating(false);
+              return;
+            }
           }
-          setCreateOptions(await getTaskCreateOptions(pid));
+          const options = await getTaskCreateOptions(pid);
+          if (isFailure(options)) {
+            addToast(options.error, "error");
+            setCreating(false);
+            return;
+          }
+          setCreateOptions(options);
         } catch (e) {
-          addToast(e instanceof Error ? e.message : "Couldn't open the create form.", "error");
+          addToast(readableError(e), "error");
           setCreating(false);
         } finally {
           setCreateLoading(false);
         }
       })();
     },
-    [createProjects, addToast],
+    [addToast],
   );
 
   const changeCreateProject = useCallback(
@@ -157,8 +173,11 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
       setCreateInitialGroupId(null);
       setCreateLoading(true);
       getTaskCreateOptions(projectId)
-        .then(setCreateOptions)
-        .catch((e) => addToast(e instanceof Error ? e.message : "Couldn't load that project.", "error"))
+        .then((options) => {
+          if (isFailure(options)) addToast(options.error, "error");
+          else setCreateOptions(options);
+        })
+        .catch((e) => addToast(readableError(e), "error"))
         .finally(() => setCreateLoading(false));
     },
     [addToast],
@@ -171,14 +190,24 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
 
   // Every inline edit runs through here: perform the mutation, re-fetch the drawer's own data,
   // and refresh the underlying view (RSC) so the board/list reflects the change too.
-  function runEdit(fn: () => Promise<void>) {
+  // Server actions return { ok: false, error } for an expected problem; that message is shown as a
+  // toast and the drawer reloads so a rejected change snaps back to the real value (QA A-01, E-02).
+  function runEdit(fn: () => Promise<unknown>, onDone?: () => void) {
     startTransition(async () => {
       try {
-        await fn();
+        const result = await fn();
+        if (isFailure(result)) {
+          addToast(result.error, "error");
+        } else {
+          const notice = noticeOf(result);
+          if (notice) addToast(notice, "success");
+          onDone?.();
+        }
         if (taskId) await load(taskId);
         router.refresh();
       } catch (e) {
-        addToast(e instanceof Error ? e.message : "Something went wrong.", "error");
+        addToast(readableError(e), "error");
+        if (taskId) await load(taskId);
       }
     });
   }
@@ -187,10 +216,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
     const text = commentText.trim();
     if (!text || !taskId || !data) return;
     const projectId = data.projectId;
-    runEdit(async () => {
-      await addComment(projectId, taskId, fd({ text }));
-      setCommentText("");
-    });
+    runEdit(() => addComment(projectId, taskId, fd({ text })), () => setCommentText(""));
   }
 
   return (
@@ -199,6 +225,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
       {creating && (
         <CreateTaskPanel
           projects={createProjects}
+          projectLocked={createProjectLocked}
           options={createOptions}
           loading={createLoading}
           initialGroupId={createInitialGroupId}
@@ -241,22 +268,30 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                   </div>
 
                   <Field label="Status">
-                    <select
-                      className={selectClass}
-                      disabled={pending}
-                      value={(STATUS_TARGETS as readonly string[]).includes(data.status) ? data.status : ""}
-                      onChange={(e) => {
-                        const target = e.target.value;
-                        if (target) runEdit(() => changeTaskStatusByDrag(data.id, target, `/projects/${data.projectId}`));
-                      }}
-                    >
-                      {!(STATUS_TARGETS as readonly string[]).includes(data.status) && (
-                        <option value="">{STATUS_LABELS[data.status] ?? data.status} (current)</option>
-                      )}
-                      {STATUS_TARGETS.map((s) => (
-                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                      ))}
-                    </select>
+                    {data.statusOptions.length > 1 ? (
+                      <select
+                        className={selectClass}
+                        disabled={pending}
+                        value={data.status}
+                        onChange={(e) => {
+                          const target = e.target.value;
+                          if (target && target !== data.status) {
+                            runEdit(() => changeTaskStatusByDrag(data.id, target, `/projects/${data.projectId}`));
+                          }
+                        }}
+                      >
+                        {data.statusOptions.map((o) => (
+                          <option key={`${o.value}-${o.label}`} value={o.value} disabled={o.disabled}>
+                            {o.label}
+                            {o.hint ? ` — ${o.hint}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      // Nothing this user may change it to — show the status instead of a dropdown
+                      // full of moves that would only be refused (QA B-02, E-01).
+                      <p className="text-sm">{data.statusLabel}</p>
+                    )}
                   </Field>
 
                   {data.canReassign && (
@@ -270,8 +305,13 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                           if (v && v !== data.assignedToId) runEdit(() => reassignTask(data.id, fd({ assignedToId: v })));
                         }}
                       >
+                        {/* The current assignee stays as the selected label; every other option is a
+                            different person (QA F-01 — same person = Send to Revision). */}
                         {data.assignees.map((a) => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
+                          <option key={a.id} value={a.id} disabled={a.id === data.assignedToId}>
+                            {a.name}
+                            {a.id === data.assignedToId ? " (current)" : ""}
+                          </option>
                         ))}
                       </select>
                     </Field>
@@ -332,6 +372,11 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                           <option key={s.id} value={s.id}>{s.name}{s.status === "ACTIVE" ? " · Active" : s.status === "COMPLETED" ? " · Completed" : ""}</option>
                         ))}
                       </select>
+                      {data.sprints.length === 0 && (
+                        <span className="text-xs text-gs-gray">
+                          No open sprints yet — a Lead creates one from the project page.
+                        </span>
+                      )}
                     </Field>
                   )}
 

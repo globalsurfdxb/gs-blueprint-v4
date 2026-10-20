@@ -5,6 +5,7 @@ import {
   isDependencyCoordinator,
   canManageClients,
   canCreateClient,
+  hasPersonalTaskList,
   canCreateProject,
   canAccessContentCalendar,
   canViewDashboard,
@@ -63,7 +64,9 @@ export function getNavItems(user: CurrentUser, opts: { isDependencyTracker?: boo
   }
 
   items.push({ label: "Projects", href: "/projects" });
-  items.push({ label: "My Tasks", href: "/my-tasks" });
+  if (hasPersonalTaskList(user)) {
+    items.push({ label: "My Tasks", href: "/my-tasks" });
+  }
 
   if (isLead(user)) {
     items.push({ label: "My Reviews", href: "/my-reviews" });
@@ -89,6 +92,7 @@ export function getNavItems(user: CurrentUser, opts: { isDependencyTracker?: boo
 
   if (isAdmin(user)) {
     items.push({ label: "Users & Roles", href: "/admin/users", section: "Admin" });
+    items.push({ label: "Industries", href: "/admin/industries", section: "Admin" });
     items.push({ label: "Content Types", href: "/admin/content-types", section: "Admin" });
     items.push({ label: "Bug Tracking", href: "/admin/bug-tracking", section: "Admin" });
     items.push({ label: "Content Body", href: "/admin/content-body", section: "Admin" });

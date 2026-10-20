@@ -1,4 +1,5 @@
 import { SaveButton } from "@/components/save-button";
+import { ActionForm } from "@/components/action-form";
 
 type Defaults = { name: string; contentLeadTimeDays: number; designLeadTimeDays: number };
 
@@ -10,7 +11,7 @@ export function EditContentTypeForm({
   action: (formData: FormData) => void;
 }) {
   return (
-    <form action={action} className="flex flex-wrap items-end gap-3">
+    <ActionForm action={action} className="flex flex-wrap items-end gap-3">
       <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-gs-gray">Name</span>
         <input
@@ -45,6 +46,6 @@ export function EditContentTypeForm({
       <SaveButton className="btn btn-secondary">
         Save
       </SaveButton>
-    </form>
+    </ActionForm>
   );
 }

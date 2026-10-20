@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageClients, canCreateClient, isAdmin } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 async function requireClientManager() {
   const user = await getCurrentUser();
@@ -23,69 +24,63 @@ async function requireClientCreator() {
   return user;
 }
 
+// The Client form is just a name and an Industry from the Admin-managed list. The other columns
+// (contact person/email, account owner) stay in the database untouched — saving never clears them.
 const clientSchema = z.object({
-  name: z.string().min(1, "Client name is required."),
+  name: z.string().trim().min(1, "Client name is required."),
   industry: z.string().optional(),
-  contactPerson: z.string().optional(),
-  contactEmail: z.string().email("Enter a valid email.").optional().or(z.literal("")),
-  accountOwnerId: z.string().optional(),
 });
 
-function parseClientForm(formData: FormData) {
+async function parseClientForm(formData: FormData, existingIndustry?: string | null) {
   const parsed = clientSchema.safeParse({
     name: formData.get("name"),
     industry: formData.get("industry") || undefined,
-    contactPerson: formData.get("contactPerson") || undefined,
-    contactEmail: formData.get("contactEmail") || undefined,
-    accountOwnerId: formData.get("accountOwnerId") || undefined,
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
+  }
+  const { industry } = parsed.data;
+  // The industry must be one the Admin offers — or the value the client already has, so editing an
+  // older client (whose industry predates the list) still saves.
+  if (industry && industry !== existingIndustry) {
+    const known = await prisma.industry.findUnique({ where: { name: industry }, select: { id: true } });
+    if (!known) throw new Error("Choose an industry from the list.");
   }
   return parsed.data;
 }
 
 export async function createClient(formData: FormData) {
+  return runAction(async () => {
   const user = await requireClientCreator();
-  const data = parseClientForm(formData);
-
-  // Accountant is intake-only — their form never renders the Account Owner field, so
-  // ignore it even if present rather than letting a bypassed submission set it.
-  const canSetOwner = isAdmin(user);
+  const data = await parseClientForm(formData);
 
   const client = await prisma.client.create({
-    data: {
-      name: data.name,
-      industry: data.industry,
-      contactPerson: data.contactPerson,
-      contactEmail: data.contactEmail || undefined,
-      accountOwnerId: canSetOwner ? data.accountOwnerId : undefined,
-    },
+    data: { name: data.name, industry: data.industry },
   });
 
   revalidatePath("/clients");
   // Accountant can't view the client detail page (intake-only) — send them back to the
   // Dashboard instead of a page that would immediately bounce them.
   redirect(isAdmin(user) ? `/clients/${client.id}` : "/");
+  });
 }
 
 export async function updateClient(clientId: string, formData: FormData) {
+  return runAction(async () => {
   await requireClientManager();
-  const data = parseClientForm(formData);
+  const existing = await prisma.client.findUnique({ where: { id: clientId }, select: { industry: true } });
+  if (!existing) throw new Error("This client no longer exists.");
+  const data = await parseClientForm(formData, existing.industry);
 
   await prisma.client.update({
     where: { id: clientId },
-    data: {
-      name: data.name,
-      industry: data.industry,
-      contactPerson: data.contactPerson,
-      contactEmail: data.contactEmail || null,
-      accountOwnerId: data.accountOwnerId || null,
-    },
+    // `industry: null` clears it when "Not specified" is chosen.
+    data: { name: data.name, industry: data.industry ?? null },
   });
 
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/clients");
+  });
 }
 
 /**
@@ -97,6 +92,7 @@ export async function deleteClient(
   _prevState: { error?: string } | undefined,
   _formData: FormData,
 ): Promise<{ error?: string }> {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user || !isAdmin(user)) return { error: "Only an Admin can delete a client." };
 
@@ -116,4 +112,5 @@ export async function deleteClient(
 
   revalidatePath("/clients");
   redirect("/clients");
+  });
 }

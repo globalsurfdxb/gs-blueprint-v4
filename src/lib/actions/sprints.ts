@@ -4,8 +4,9 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { canManageSprints } from "@/lib/permissions";
+import { canAssignTaskToSprint, canManageSprints } from "@/lib/permissions";
 import type { SprintStatus } from "@/generated/prisma/client";
+import { runAction } from "@/lib/run-action";
 
 // Sprint management (PRD 8.14). All actions gate on canManageSprints — Lead of a Sprint-enabled
 // group on the project, its Cluster Head, or Admin. A Sprint is project-scoped; its dates are set
@@ -36,6 +37,7 @@ const createSchema = z
   });
 
 export async function createSprint(projectId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated.");
 
@@ -66,6 +68,7 @@ export async function createSprint(projectId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${projectId}`);
+  });
 }
 
 const updateSchema = z
@@ -82,6 +85,7 @@ const updateSchema = z
 /** Edit a Sprint's name and dates. Dates can only change while the Sprint is still Planned —
  * once Active they're locked until it completes (PRD 8.14). */
 export async function updateSprint(sprintId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated.");
 
@@ -112,11 +116,13 @@ export async function updateSprint(sprintId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${sprint.projectId}`);
+  });
 }
 
 const statusSchema = z.object({ status: z.enum(SPRINT_STATUSES) });
 
 export async function setSprintStatus(sprintId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated.");
 
@@ -137,6 +143,7 @@ export async function setSprintStatus(sprintId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${sprint.projectId}`);
+  });
 }
 
 const taskSprintSchema = z.object({ sprintId: z.string() });
@@ -147,6 +154,7 @@ const taskSprintSchema = z.object({ sprintId: z.string() });
  * project. Never a workflow gate — this only sets a planning field.
  */
 export async function setTaskSprint(taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated.");
 
@@ -160,8 +168,8 @@ export async function setTaskSprint(taskId: string, formData: FormData) {
   }
 
   const loaded = await loadProjectForSprintAuth(task.projectId);
-  if (!loaded || !canManageSprints(user, loaded.project, loaded.sprintEnabledGroups)) {
-    throw new Error("You don't have permission to assign Sprints on this project.");
+  if (!loaded || !canAssignTaskToSprint(user, loaded.project, loaded.sprintEnabledGroups, task)) {
+    throw new Error("Only the task's assignee, its creator or a Sprint manager can change its Sprint.");
   }
 
   const parsed = taskSprintSchema.safeParse({ sprintId: formData.get("sprintId") ?? "" });
@@ -179,4 +187,5 @@ export async function setTaskSprint(taskId: string, formData: FormData) {
 
   revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
   revalidatePath(`/projects/${task.projectId}`);
+  });
 }

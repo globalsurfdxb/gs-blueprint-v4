@@ -21,7 +21,7 @@ import {
   isCalendarPipelinePod,
   canApproveCalendarHandoff,
   canApproveCalendarFinalDelivery,
-  canManageSprints,
+  canAssignTaskToSprint,
 } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { createSubtask, assignHandoffTask, reassignTask, deleteTask } from "@/lib/actions/tasks";
@@ -136,7 +136,7 @@ export default async function TaskDetailPage({
   // read-only. This is a planning field, never a gate on the task's own workflow.
   const sprintEnabled = !!group?.pod?.sprintWorkflowEnabled;
   const sprintEnabledGroups = project.taskGroups.filter((g) => g.pod?.sprintWorkflowEnabled);
-  const canManageSprintHere = sprintEnabled && canManageSprints(user, project, sprintEnabledGroups);
+  const canManageSprintHere = sprintEnabled && canAssignTaskToSprint(user, project, sprintEnabledGroups, task);
   const projectSprints = canManageSprintHere
     ? await prisma.sprint.findMany({
         where: { projectId: project.id, OR: [{ status: { not: "COMPLETED" } }, { id: task.sprintId ?? "" }] },
@@ -531,33 +531,36 @@ export default async function TaskDetailPage({
         deleteAction={deleteComment.bind(null, project.id, task.id)}
       />
 
-      <div className="mt-8">
-        <h2 className="text-sm font-semibold uppercase text-gs-gray">Subtasks</h2>
-        <div className="mt-3 flex flex-col gap-2">
-          {task.subtasks.length === 0 && (
-            <p className="text-sm text-gs-gray">No subtasks yet.</p>
+      {/* No empty-state sentence (QA D-01): the section only appears when there is something to
+          show or the viewer can add a subtask. */}
+      {(task.subtasks.length > 0 || (canAddSubtask && !task.parentTaskId)) && (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold uppercase text-gs-gray">Subtasks</h2>
+          {task.subtasks.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2">
+              {task.subtasks.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/projects/${project.id}/tasks/${s.id}`}
+                  className="flex items-center justify-between rounded-md border border-gs-gray/15 bg-white px-4 py-2 text-sm hover:bg-gs-light"
+                >
+                  <span>{s.name}</span>
+                  <span className="text-gs-gray">{s.assignedTo?.name ?? "Unassigned"} · {STATUS_LABELS[s.status]}</span>
+                </Link>
+              ))}
+            </div>
           )}
-          {task.subtasks.map((s) => (
-            <Link
-              key={s.id}
-              href={`/projects/${project.id}/tasks/${s.id}`}
-              className="flex items-center justify-between rounded-md border border-gs-gray/15 bg-white px-4 py-2 text-sm hover:bg-gs-light"
-            >
-              <span>{s.name}</span>
-              <span className="text-gs-gray">{s.assignedTo?.name ?? "Unassigned"} · {STATUS_LABELS[s.status]}</span>
-            </Link>
-          ))}
-        </div>
 
-        {canAddSubtask && !task.parentTaskId && (
-          <div className="mt-4">
-            <AddSubtaskForm action={createSubtaskWithIds} />
-            <p className="mt-2 text-xs text-gs-gray">
-              Subtasks are for your own use and stay assigned to you — they can&apos;t be reassigned.
-            </p>
-          </div>
-        )}
-      </div>
+          {canAddSubtask && !task.parentTaskId && (
+            <div className="mt-4">
+              <AddSubtaskForm action={createSubtaskWithIds} />
+              <p className="mt-2 text-xs text-gs-gray">
+                New subtasks are assigned to you; a Lead can reassign one to a teammate.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Route onward: hand off / reject & return / calendar sign-off, then the Successor
              summary. Kept at the bottom so the chain reads top-to-bottom (Predecessor above,
@@ -579,7 +582,7 @@ export default async function TaskDetailPage({
       )}
 
       {canApproveDesignHandoff && (
-        <form action={approveCalendarHandoffToDesign.bind(null, task.id)} className="mt-4 rounded-lg border border-gs-gray/15 bg-white p-4">
+        <ActionForm action={approveCalendarHandoffToDesign.bind(null, task.id)} className="mt-4 rounded-lg border border-gs-gray/15 bg-white p-4">
           <button
             type="submit"
             className="btn btn-primary hover:bg-gs-red/90"
@@ -593,11 +596,11 @@ export default async function TaskDetailPage({
               entry&apos;s Publish Date and Content Type.
             </p>
           )}
-        </form>
+        </ActionForm>
       )}
 
       {canGiveFinalCalendarApproval && (
-        <form action={approveCalendarFinalDelivery.bind(null, task.id)} className="mt-4 rounded-lg border border-gs-gray/15 bg-white p-4">
+        <ActionForm action={approveCalendarFinalDelivery.bind(null, task.id)} className="mt-4 rounded-lg border border-gs-gray/15 bg-white p-4">
           <button
             type="submit"
             className="btn btn-primary hover:bg-gs-red/90"
@@ -607,7 +610,7 @@ export default async function TaskDetailPage({
           <p className="mt-2 text-xs text-gs-gray">
             Closes out this Content Calendar entry — the last step after Design has completed the work.
           </p>
-        </form>
+        </ActionForm>
       )}
 
       {task.calendarApprovedAt && task.calendarApprovedBy && (

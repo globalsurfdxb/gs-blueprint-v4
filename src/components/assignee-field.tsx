@@ -43,7 +43,9 @@ export function AssigneeField({
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor="assignedToId" className="text-sm font-medium">Assigned To</label>
-      <select id="assignedToId" name="assignedToId" required className={fieldClass}>
+      {/* defaultValue="" keeps the placeholder selected: without it the browser silently picks the
+          first listed person (usually the Lead), so tasks were assigned by accident (QA F-05). */}
+      <select id="assignedToId" name="assignedToId" required defaultValue="" className={fieldClass}>
         <option value="" disabled>Select one person</option>
         {assignees.map((a) => (
           <option key={a.id} value={a.id}>{a.name}</option>

@@ -327,7 +327,10 @@ export default async function ProjectDetailPage({
       const tasks = tasksByGroupId.get(group.id) ?? [];
       const isThisGroupsLead = group.leadUserId === user.id;
       const isCalendarPipelineOversight = socialMediaOversight && isCalendarPipelinePod(group.pod?.name);
-      const canSeeAllTasks = canOverseeGroup(user, project, group) || isThisGroupsLead || isCalendarPipelineOversight;
+      // A user an Admin has restricted to their own tasks never gets the whole-group view, whatever
+      // their role (see canViewTask).
+      const canSeeAllTasks =
+        !user.restrictToOwnTasks && (canOverseeGroup(user, project, group) || isThisGroupsLead || isCalendarPipelineOversight);
       const isOwnTask = (t: (typeof tasks)[number]) => t.assignedToId === user.id || t.createdById === user.id;
       const hasOwnTask = tasks.some(isOwnTask);
       // A Contributor may self-create in a group that belongs to their own pod (PRD 8.2).
@@ -342,7 +345,7 @@ export default async function ProjectDetailPage({
         canCreateTask: canCreateAnywhere || canSelfCreateHere,
         canRemove: canManageThisGroup(user, project, group) && tasks.length === 0,
         totalSeconds:
-          canViewGroupTimeRollup(user, project, group) || isCalendarPipelineOversight
+          !user.restrictToOwnTasks && (canViewGroupTimeRollup(user, project, group) || isCalendarPipelineOversight)
             ? secondsByGroup.get(group.id) ?? 0
             : null,
       };

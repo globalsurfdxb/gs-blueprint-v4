@@ -6,6 +6,7 @@ import { statusLabel } from "@/lib/bug";
 import { useToast } from "@/components/toast";
 import { changeTaskStatusByDrag } from "@/lib/actions/task-status";
 import { TaskOpener } from "@/components/task-drawer";
+import { isFailure, noticeOf, readableError } from "@/lib/action-result";
 
 // A single task as the Kanban/Calendar renderers need it. The server sends this already
 // scoped to what the viewer may see — the view toggle NEVER changes the query, only the
@@ -158,12 +159,18 @@ function KanbanBoard({ tasks, surfacePath }: { tasks: ViewTask[]; surfacePath: s
     if (!task || columnOf(task) === targetStatus) return; // no-op drop onto same column
     startTransition(async () => {
       try {
-        await changeTaskStatusByDrag(id, targetStatus, surfacePath);
+        const result = await changeTaskStatusByDrag(id, targetStatus, surfacePath);
+        if (isFailure(result)) {
+          // Same plain-language rejection a blocked status change gives elsewhere — the card
+          // snaps back because we never moved it optimistically; the data is the source of truth.
+          addToast(result.error, "error");
+          return;
+        }
         addToast("Task moved.", "success");
+        const notice = noticeOf(result);
+        if (notice) addToast(notice, "success");
       } catch (e) {
-        // Same rejection a blocked status change gives from the list view — the card snaps
-        // back because we never moved it optimistically; the data is the source of truth.
-        addToast(e instanceof Error ? e.message : "Couldn't move that task.", "error");
+        addToast(readableError(e), "error");
       }
     });
   }
@@ -203,10 +210,15 @@ function KanbanBoard({ tasks, surfacePath }: { tasks: ViewTask[]; surfacePath: s
                   }}
                   className={`rounded-lg border border-gs-gray/10 bg-white p-3 text-sm shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-gs-gray/25 hover:shadow-md ${
                     isDraggable(t) ? "cursor-grab active:cursor-grabbing" : ""
-                  } ${draggingId === t.id ? "scale-[0.97] rotate-1 opacity-50" : ""}`}
+                  } ${draggingId === t.id ? "scale-[0.97] rotate-1 opacity-50" : ""} ${t.status === "COMPLETED" ? "bg-gs-light/60" : ""}`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <TaskOpener taskId={t.id} projectId={t.projectId} className="text-left font-medium leading-snug hover:underline">
+                    <TaskOpener
+                      taskId={t.id}
+                      projectId={t.projectId}
+                      className={`text-left font-medium leading-snug hover:underline ${t.status === "COMPLETED" ? "text-gs-gray line-through decoration-gs-gray/40" : ""}`}
+                    >
+                      {t.status === "COMPLETED" && <span className="mr-1 text-emerald-600 no-underline">✓</span>}
                       {t.name}
                     </TaskOpener>
                   </div>
@@ -231,9 +243,13 @@ function CalendarEntry({ t }: { t: ViewTask }) {
     <TaskOpener
       taskId={t.id}
       projectId={t.projectId}
-      className="flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] transition-colors duration-150 hover:bg-gs-red/10 hover:text-gs-red"
+      className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] transition-colors duration-150 hover:bg-gs-red/10 hover:text-gs-red ${t.status === "COMPLETED" ? "text-gs-gray line-through decoration-gs-gray/40" : ""}`}
     >
-      <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gs-gray"}`} aria-hidden />
+      {t.status === "COMPLETED" ? (
+        <span className="shrink-0 text-emerald-600 no-underline" aria-label="Completed">✓</span>
+      ) : (
+        <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gs-gray"}`} aria-hidden />
+      )}
       <span className="truncate">{t.name}</span>
     </TaskOpener>
   );
@@ -386,6 +402,36 @@ function CalendarView({ tasks, todayKey }: { tasks: ViewTask[]; todayKey: string
   );
 }
 
+// ---------- board filters ----------
+
+type BoardFilters = { status: string; priority: string; type: string; owner: string; project: string };
+const NO_FILTERS: BoardFilters = { status: "all", priority: "all", type: "all", owner: "all", project: "all" };
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: [string, string][];
+}) {
+  return (
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="field field-sm text-xs"
+    >
+      {options.map(([v, l]) => (
+        <option key={v} value={v}>{l}</option>
+      ))}
+    </select>
+  );
+}
+
 // ---------- toggle wrapper ----------
 
 const TOGGLE: { mode: ViewMode; label: string }[] = [
@@ -428,6 +474,8 @@ export function TaskViews({
   const storageKey = `gsb:view:${surfacePath}`;
   const [mode, setMode] = useState<string>("list");
   const [activeSprintOnly, setActiveSprintOnly] = useState(false);
+  const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
+  const setFilter = (key: keyof BoardFilters, value: string) => setFilters((f) => ({ ...f, [key]: value }));
 
   const toggleOptions: { mode: string; label: string }[] = extraView
     ? [...TOGGLE, { mode: extraView.mode, label: extraView.label }]
@@ -472,10 +520,26 @@ export function TaskViews({
     );
   }
 
+  // Board filters (QA D-05) — shared by Kanban and Calendar, applied instantly as they change
+  // (QA D-06: no Apply button). They only narrow what is drawn; visibility is decided server-side.
+  const filteredTasks = tasks.filter(
+    (t) =>
+      (filters.status === "all" ||
+        (filters.status === "open" ? t.status !== "COMPLETED" : t.status === filters.status)) &&
+      (filters.priority === "all" || t.priority === filters.priority) &&
+      (filters.type === "all" || t.taskType === filters.type) &&
+      (filters.owner === "all" || t.assigneeName === filters.owner) &&
+      (filters.project === "all" || t.projectName === filters.project),
+  );
+  const ownerOptions = Array.from(new Set(tasks.map((t) => t.assigneeName).filter((n): n is string => !!n))).sort();
+  const projectOptions = Array.from(new Set(tasks.map((t) => t.projectName).filter((n): n is string => !!n))).sort();
+  const hasBugs = tasks.some((t) => t.taskType === "BUG");
+  const filtersActive = Object.values(filters).some((v) => v !== "all");
+
   // "Active Sprint only" applies to the Kanban only (PRD 8.14) and only where Sprint Workflow
   // is enabled; off by default so the board reads exactly as it does today everywhere else.
   const kanbanTasks =
-    sprintFilterEnabled && activeSprintOnly ? tasks.filter((t) => t.inActiveSprint) : tasks;
+    sprintFilterEnabled && activeSprintOnly ? filteredTasks.filter((t) => t.inActiveSprint) : filteredTasks;
 
   return (
     <div>
@@ -504,12 +568,75 @@ export function TaskViews({
             Active Sprint only
           </label>
         )}
+        {(mode === "kanban" || mode === "calendar") && (
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterSelect
+              label="Status"
+              value={filters.status}
+              onChange={(v) => setFilter("status", v)}
+              options={[
+                ["all", "All statuses"],
+                ["open", "Open (not completed)"],
+                ["COMPLETED", "Completed"],
+                ["NEW", "New"],
+                ["IN_PROGRESS", "In Progress"],
+                ["REVIEW", "Review"],
+                ["ON_HOLD", "On Hold"],
+              ]}
+            />
+            <FilterSelect
+              label="Priority"
+              value={filters.priority}
+              onChange={(v) => setFilter("priority", v)}
+              options={[
+                ["all", "All priorities"],
+                ["URGENT", "Urgent"],
+                ["HIGH", "High"],
+                ["MEDIUM", "Medium"],
+                ["LOW", "Low"],
+              ]}
+            />
+            {hasBugs && (
+              <FilterSelect
+                label="Type"
+                value={filters.type}
+                onChange={(v) => setFilter("type", v)}
+                options={[
+                  ["all", "All types"],
+                  ["STANDARD", "Tasks"],
+                  ["BUG", "Bugs"],
+                ]}
+              />
+            )}
+            {ownerOptions.length > 1 && (
+              <FilterSelect
+                label="Owner"
+                value={filters.owner}
+                onChange={(v) => setFilter("owner", v)}
+                options={[["all", "All owners"], ...ownerOptions.map((n): [string, string] => [n, n])]}
+              />
+            )}
+            {projectOptions.length > 1 && (
+              <FilterSelect
+                label="Project"
+                value={filters.project}
+                onChange={(v) => setFilter("project", v)}
+                options={[["all", "All projects"], ...projectOptions.map((n): [string, string] => [n, n])]}
+              />
+            )}
+            {filtersActive && (
+              <button type="button" onClick={() => setFilters(NO_FILTERS)} className="text-xs font-medium text-gs-red hover:underline">
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div key={mode} className="view-enter">
         {mode === "list" && children}
         {mode === "kanban" && <KanbanBoard tasks={kanbanTasks} surfacePath={surfacePath} />}
-        {mode === "calendar" && <CalendarView tasks={tasks} todayKey={todayKey} />}
+        {mode === "calendar" && <CalendarView tasks={filteredTasks} todayKey={todayKey} />}
         {extraView && mode === extraView.mode && extraView.content}
       </div>
     </div>

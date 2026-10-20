@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { runAction } from "@/lib/run-action";
 
 export async function markNotificationRead(notificationId: string, _formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -15,9 +17,11 @@ export async function markNotificationRead(notificationId: string, _formData: Fo
 
   await prisma.notification.update({ where: { id: notificationId }, data: { isRead: true } });
   revalidatePath("/notifications");
+  });
 }
 
 export async function markAllNotificationsRead(_formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -26,4 +30,5 @@ export async function markAllNotificationsRead(_formData: FormData) {
     data: { isRead: true },
   });
   revalidatePath("/notifications");
+  });
 }

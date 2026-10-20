@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewTask, isAdmin } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 const attachmentSchema = z.object({
   url: z.string().url("Enter a valid URL."),
@@ -12,6 +13,7 @@ const attachmentSchema = z.object({
 });
 
 export async function addAttachment(projectId: string, taskId: string, formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -39,6 +41,7 @@ export async function addAttachment(projectId: string, taskId: string, formData:
   });
 
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }
 
 export async function editAttachment(
@@ -47,6 +50,7 @@ export async function editAttachment(
   attachmentId: string,
   formData: FormData,
 ) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
@@ -66,6 +70,7 @@ export async function editAttachment(
   });
 
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }
 
 export async function deleteAttachment(
@@ -74,10 +79,20 @@ export async function deleteAttachment(
   attachmentId: string,
   _formData: FormData,
 ) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
-  if (!isAdmin(user)) throw new Error("Only an Admin can delete attachments.");
+  const attachment = await prisma.taskAttachment.findUnique({
+    where: { id: attachmentId },
+    select: { addedById: true, taskId: true },
+  });
+  if (!attachment || attachment.taskId !== taskId) throw new Error("This link no longer exists.");
+  // The person who added a link can remove it; an Admin can remove any (QA A-07).
+  if (!isAdmin(user) && attachment.addedById !== user.id) {
+    throw new Error("Only the person who added this link, or an Admin, can delete it.");
+  }
 
   await prisma.taskAttachment.delete({ where: { id: attachmentId } });
   revalidatePath(`/projects/${projectId}/tasks/${taskId}`);
+  });
 }

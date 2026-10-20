@@ -109,6 +109,10 @@ model User {
   passwordHash String   @map("password_hash")
   location     Location
   isActive     Boolean  @default(true) @map("is_active")
+  // Admin-set: this person only ever sees tasks assigned to or created by them, even when their
+  // role (e.g. a Lead) would normally show them the whole group — for a Lead who sits in a pod
+  // alongside people whose work they shouldn't see.
+  restrictToOwnTasks Boolean @default(false) @map("restrict_to_own_tasks")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -233,6 +237,16 @@ model Client {
   projects Project[]
 
   @@map("clients")
+}
+
+// The Industry choices offered on the Client form — Admin-managed (add / rename / delete). A client
+// stores the industry NAME (Client.industry), so existing clients keep working unchanged.
+model Industry {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("industries")
 }
 
 model ServiceType {

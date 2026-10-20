@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageContentTypes } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 const contentTypeSchema = z
   .object({
@@ -25,6 +26,7 @@ async function requireContentTypeManager() {
 }
 
 export async function createContentType(formData: FormData) {
+  return runAction(async () => {
   await requireContentTypeManager();
 
   const parsed = contentTypeSchema.safeParse({
@@ -44,9 +46,11 @@ export async function createContentType(formData: FormData) {
   await prisma.contentType.create({ data: parsed.data });
 
   revalidatePath("/admin/content-types");
+  });
 }
 
 export async function updateContentType(contentTypeId: string, formData: FormData) {
+  return runAction(async () => {
   await requireContentTypeManager();
 
   const parsed = contentTypeSchema.safeParse({
@@ -68,9 +72,11 @@ export async function updateContentType(contentTypeId: string, formData: FormDat
   await prisma.contentType.update({ where: { id: contentTypeId }, data: parsed.data });
 
   revalidatePath("/admin/content-types");
+  });
 }
 
 export async function deleteContentType(contentTypeId: string, _formData: FormData) {
+  return runAction(async () => {
   await requireContentTypeManager();
 
   const taskCount = await prisma.task.count({ where: { contentTypeId } });
@@ -83,4 +89,5 @@ export async function deleteContentType(contentTypeId: string, _formData: FormDa
   await prisma.contentType.delete({ where: { id: contentTypeId } });
 
   revalidatePath("/admin/content-types");
+  });
 }

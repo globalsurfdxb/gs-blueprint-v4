@@ -5,12 +5,15 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import { daysOverdue, getLocalDateString, addDays } from "@/lib/timezone";
-import { hidesCompletedProjects } from "@/lib/permissions";
+import { hasPersonalTaskList, hidesCompletedProjects } from "@/lib/permissions";
 import { statusLabel } from "@/lib/bug";
 import { TaskViews, type ViewTask } from "@/components/task-views";
 import { TaskDrawerProvider, TaskOpener } from "@/components/task-drawer";
 import { PageHeader } from "@/components/page-header";
 import { PriorityPill, RevisionBadge, TaskStatusChip } from "@/components/task-chips";
+import { AutoFilterForm } from "@/components/auto-filter-form";
+
+const COMPLETED_WINDOW_DAYS = 30;
 
 export default async function MyTasksPage({
   searchParams,
@@ -19,14 +22,19 @@ export default async function MyTasksPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  // Account Managers have no personal task list (see hasPersonalTaskList).
+  if (!hasPersonalTaskList(user)) redirect("/projects");
 
   const { sprint: sprintParam = "" } = await searchParams;
 
   const now = new Date();
+  // Completed work stays visible for a while so the Kanban "Completed" column and the list aren't
+  // empty (QA A-04, D-04): everything open, plus anything completed in the last 30 days.
+  const completedSince = new Date(now.getTime() - COMPLETED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const allTasks = await prisma.task.findMany({
     where: {
       assignedToId: user.id,
-      status: { not: "COMPLETED" },
+      OR: [{ status: { not: "COMPLETED" } }, { status: "COMPLETED", completedAt: { gte: completedSince } }],
       project: {
         // Archived projects drop out for everyone.
         archivedAt: null,
@@ -115,8 +123,10 @@ export default async function MyTasksPage({
 
   for (const [projectId, bucket] of byProject) {
     const projectTasks = tasks.filter((t) => t.projectId === projectId);
-    const ownTopLevel = projectTasks.filter((t) => t.parentTaskId === null);
-    const ownSubs = projectTasks.filter((t) => t.parentTaskId !== null);
+    // Pending work first, completed after it (stable sort keeps the due-date order inside each).
+    const pendingFirst = (a: Row, b: Row) => Number(a.status === "COMPLETED") - Number(b.status === "COMPLETED");
+    const ownTopLevel = projectTasks.filter((t) => t.parentTaskId === null).sort(pendingFirst);
+    const ownSubs = projectTasks.filter((t) => t.parentTaskId !== null).sort(pendingFirst);
     const ownTopLevelIds = new Set(ownTopLevel.map((t) => t.id));
 
     // Own top-level tasks, each with any of the user's own subtasks nested beneath.
@@ -177,8 +187,11 @@ export default async function MyTasksPage({
     if (d <= sundayStr) return "week";
     return "later";
   }
+  // The daily-planning buckets and the count cards are about work still to do, so completed
+  // tasks (kept in the list and boards for reference) are left out of them.
+  const openTasks = tasks.filter((t) => t.status !== "COMPLETED");
   const bucketed = new Map<BucketKey, Row[]>(BUCKETS.map((b) => [b.key, []]));
-  for (const t of tasks) bucketed.get(bucketOf(t))!.push(t); // tasks already sorted by dueDate asc
+  for (const t of openTasks) bucketed.get(bucketOf(t))!.push(t); // already sorted by dueDate asc
 
   function OverdueBadge({ dueDate, status }: { dueDate: Date; status: string }) {
     if (status === "COMPLETED") return null;
@@ -195,12 +208,20 @@ export default async function MyTasksPage({
   }
 
   function TaskCells({ t, indent }: { t: Row; indent: boolean }) {
+    const done = t.status === "COMPLETED";
     return (
       <>
         <td className="px-4 py-2" style={indent ? { paddingLeft: "2rem" } : undefined}>
           <span className="inline-flex items-center">
             {indent && <span className="mr-1 text-gs-gray/50">└</span>}
-            <TaskOpener taskId={t.id} projectId={t.projectId} className="font-medium transition-colors hover:text-gs-red">
+            {/* Completed work reads differently from pending work at a glance (QA D-04): a green
+                tick, a struck-through grey title, and a muted row. */}
+            {done && <span className="mr-1.5 text-emerald-600" aria-label="Completed" title="Completed">✓</span>}
+            <TaskOpener
+              taskId={t.id}
+              projectId={t.projectId}
+              className={`font-medium transition-colors hover:text-gs-red ${done ? "text-gs-gray line-through decoration-gs-gray/40" : ""}`}
+            >
               {t.name}
             </TaskOpener>
             {t.taskType === "BUG" && (
@@ -284,9 +305,9 @@ export default async function MyTasksPage({
         })}
       </div>
 
-      {tasks.length === 0 ? (
+      {openTasks.length === 0 ? (
         <p className="text-sm text-gs-gray">
-          {validSprintFilter ? "No tasks match this Sprint filter." : "Nothing assigned to you yet."}
+          {validSprintFilter ? "No open tasks match this Sprint filter." : "Nothing open — you're all caught up."}
         </p>
       ) : (
         BUCKETS.map((b) => {
@@ -330,7 +351,7 @@ export default async function MyTasksPage({
         title="My Tasks"
         actions={<>
           {sprintWorkflowRelevant && (
-          <form method="get" className="flex items-center gap-2">
+          <AutoFilterForm className="flex items-center gap-2">
             <label htmlFor="sprint" className="text-xs font-medium text-gs-gray">Sprint</label>
             <select
               id="sprint"
@@ -349,15 +370,14 @@ export default async function MyTasksPage({
                 </optgroup>
               )}
             </select>
-            <button type="submit" className="btn btn-secondary btn-sm">Apply</button>
-          </form>
+          </AutoFilterForm>
         )}
         </>}
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Open tasks", value: tasks.length, tone: "" },
+          { label: "Open tasks", value: openTasks.length, tone: "" },
           { label: "Overdue", value: bucketed.get("overdue")!.length, tone: bucketed.get("overdue")!.length > 0 ? "text-gs-red" : "" },
           { label: "Due today", value: bucketed.get("today")!.length, tone: bucketed.get("today")!.length > 0 ? "text-amber-600" : "" },
           { label: "In review", value: tasks.filter((t) => t.status === "REVIEW").length, tone: "" },
@@ -411,7 +431,7 @@ export default async function MyTasksPage({
                     {parents.map(({ parent, isOwn, children, contextNote }) => (
                       <Fragment key={isOwn ? parent.id : `ctx-${parent.parentTaskId}`}>
                         {isOwn ? (
-                          <tr className="border-t border-gs-gray/10">
+                          <tr className={`border-t border-gs-gray/10 ${parent.status === "COMPLETED" ? "bg-gs-light/50 opacity-75" : ""}`}>
                             <TaskCells t={parent} indent={false} />
                           </tr>
                         ) : (
@@ -428,7 +448,7 @@ export default async function MyTasksPage({
                           </tr>
                         )}
                         {children.map((c) => (
-                          <tr key={c.id} className="border-t border-gs-gray/10">
+                          <tr key={c.id} className={`border-t border-gs-gray/10 ${c.status === "COMPLETED" ? "bg-gs-light/50 opacity-75" : ""}`}>
                             <TaskCells t={c} indent />
                           </tr>
                         ))}

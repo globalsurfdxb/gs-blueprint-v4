@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { TimeLogParams, TimeLogPeriod } from "@/lib/reports";
+import { AutoFilterForm } from "@/components/auto-filter-form";
 
 const PERIODS: { value: TimeLogPeriod; label: string }[] = [
   { value: "day", label: "Today" },
@@ -27,7 +28,7 @@ export function TimeLogsFilters({
   const [period, setPeriod] = useState<TimeLogPeriod>(params.period);
 
   return (
-    <form method="get" className="mt-6 rounded-lg border border-gs-gray/15 bg-white p-4">
+    <AutoFilterForm className="mt-6 rounded-lg border border-gs-gray/15 bg-white p-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-gs-gray">Project</span>
@@ -75,12 +76,6 @@ export function TimeLogsFilters({
         </div>
       )}
 
-      <button
-        type="submit"
-        className="btn btn-primary mt-4 self-start px-5"
-      >
-        Apply
-      </button>
-    </form>
+    </AutoFilterForm>
   );
 }

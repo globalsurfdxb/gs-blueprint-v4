@@ -1,30 +1,35 @@
+import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { SaveButton } from "@/components/save-button";
 
-type Owner = { id: string; name: string };
 type ClientDefaults = {
   name?: string;
   industry?: string | null;
-  contactPerson?: string | null;
-  contactEmail?: string | null;
-  accountOwnerId?: string | null;
 };
 
+/**
+ * The Client form is deliberately just two fields: the client's name and an Industry chosen from
+ * the Admin-managed list (Admin → Industries). A client whose stored industry is no longer in the
+ * list still shows it as the current choice, so opening and saving them never silently blanks it.
+ */
 export function ClientForm({
   action,
-  owners,
+  industries,
   defaults,
   submitLabel,
   successMessage = "Saved.",
-  showAccountOwner = true,
+  canManageIndustries = false,
 }: {
   action: (formData: FormData) => void;
-  owners: Owner[];
+  industries: string[];
   defaults?: ClientDefaults;
   submitLabel: string;
   successMessage?: string;
-  showAccountOwner?: boolean;
+  canManageIndustries?: boolean;
 }) {
+  const current = defaults?.industry ?? "";
+  const options = current && !industries.includes(current) ? [current, ...industries] : industries;
+
   return (
     <ActionForm action={action} successMessage={successMessage} className="flex flex-col gap-4 rounded-lg border border-gs-gray/15 bg-white p-6">
       <div className="flex flex-col gap-1.5">
@@ -40,53 +45,19 @@ export function ClientForm({
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="industry" className="text-sm font-medium">Industry</label>
-        <input
-          id="industry"
-          name="industry"
-          defaultValue={defaults?.industry ?? ""}
-          className="field"
-        />
+        <select id="industry" name="industry" defaultValue={current} className="field">
+          <option value="">Not specified</option>
+          {options.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
+        {canManageIndustries && (
+          <p className="text-xs text-gs-gray">
+            Need another option?{" "}
+            <Link href="/admin/industries" className="font-medium text-gs-red hover:underline">Manage industries</Link>
+          </p>
+        )}
       </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="contactPerson" className="text-sm font-medium">Contact Person</label>
-        <input
-          id="contactPerson"
-          name="contactPerson"
-          defaultValue={defaults?.contactPerson ?? ""}
-          className="field"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="contactEmail" className="text-sm font-medium">Contact Email</label>
-        <input
-          id="contactEmail"
-          name="contactEmail"
-          type="email"
-          defaultValue={defaults?.contactEmail ?? ""}
-          className="field"
-        />
-      </div>
-
-      {showAccountOwner && (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="accountOwnerId" className="text-sm font-medium">Account Owner</label>
-          <select
-            id="accountOwnerId"
-            name="accountOwnerId"
-            defaultValue={defaults?.accountOwnerId ?? ""}
-            className="field"
-          >
-            <option value="">No owner assigned</option>
-            {owners.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
 
       <SaveButton>{submitLabel}</SaveButton>
     </ActionForm>

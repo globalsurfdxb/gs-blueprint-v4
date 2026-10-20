@@ -1,5 +1,7 @@
 "use client";
 
+
+import { ActionForm } from "@/components/action-form";
 export function DeleteTaskButton({
   taskName,
   action,
@@ -8,7 +10,7 @@ export function DeleteTaskButton({
   action: (formData: FormData) => void;
 }) {
   return (
-    <form
+    <ActionForm
       action={action}
       onSubmit={(e) => {
         if (
@@ -26,6 +28,6 @@ export function DeleteTaskButton({
       >
         Delete Task
       </button>
-    </form>
+    </ActionForm>
   );
 }

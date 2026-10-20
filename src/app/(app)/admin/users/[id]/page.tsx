@@ -2,11 +2,12 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { updateUser, changeUserRole, deleteUser, reassignAndDeleteUser } from "@/lib/actions/users";
+import { updateUser, setUserPassword, changeUserRole, deleteUser, reassignAndDeleteUser } from "@/lib/actions/users";
 import { EditRoleForm } from "./edit-role-form";
 import { DeleteUserButton } from "./delete-user-button";
 import { ReassignDeleteForm } from "./reassign-delete-form";
 import { PageHeader } from "@/components/page-header";
+import { ActionForm, SubmitButton } from "@/components/action-form";
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Admin",
@@ -40,6 +41,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
   if (!user) notFound();
 
   const updateUserWithId = updateUser.bind(null, user.id);
+  const setUserPasswordWithId = setUserPassword.bind(null, user.id);
   const deleteUserWithId = deleteUser.bind(null, user.id);
   const reassignAndDeleteWithId = reassignAndDeleteUser.bind(null, user.id);
   const canDelete = user.id !== currentUser.id;
@@ -61,7 +63,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
         title={user.name}
       />
 
-      <form
+      <ActionForm
         action={updateUserWithId}
         className="mt-6 flex flex-col gap-4 rounded-lg border border-gs-gray/15 bg-white p-6"
       >
@@ -106,6 +108,17 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
           Active
         </label>
 
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="restrictToOwnTasks" defaultChecked={user.restrictToOwnTasks} />
+            Only see their own tasks
+          </label>
+          <p className="ml-6 text-xs text-gs-gray">
+            For a Lead who shouldn&apos;t see teammates&apos; work: they then see only tasks assigned to or created by
+            them, and none of the other people in their group.
+          </p>
+        </div>
+
         <div className="mt-2 flex items-center gap-3">
           <button
             type="submit"
@@ -114,7 +127,50 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
             Save Changes
           </button>
         </div>
-      </form>
+      </ActionForm>
+
+      <ActionForm
+        action={setUserPasswordWithId}
+        successMessage={`Password updated for ${user.name}.`}
+        className="mt-4 flex flex-col gap-4 rounded-lg border border-gs-gray/15 bg-white p-6"
+      >
+        <div>
+          <h2 className="text-sm font-semibold">Set a new password</h2>
+          <p className="mt-1 text-xs text-gs-gray">
+            Replaces {user.id === currentUser.id ? "your" : "their"} current password straight away. Share the new one
+            with {user.id === currentUser.id ? "yourself securely" : "them securely"}; it can be changed again from the profile page.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="newPassword" className="text-sm font-medium">New password</label>
+            <input
+              id="newPassword"
+              name="newPassword"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              className="field"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="confirmPassword" className="text-sm font-medium">Confirm new password</label>
+            <input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              className="field"
+            />
+          </div>
+        </div>
+        <SubmitButton pendingLabel="Updating…" className="btn btn-secondary self-start">
+          Update Password
+        </SubmitButton>
+      </ActionForm>
 
       {canDelete && (
         <div className="mt-4">

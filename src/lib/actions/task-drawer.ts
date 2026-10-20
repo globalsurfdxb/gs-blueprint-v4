@@ -2,10 +2,14 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { canViewTask, canManageSprints, canEditTaskAttributes, isAdmin } from "@/lib/permissions";
+import { canViewTask, canAssignTaskToSprint, canEditTaskAttributes, isAdmin } from "@/lib/permissions";
 import { resolveTaskAssigneeContext } from "@/lib/task-assignment";
 import { getTaskRound } from "@/lib/task-chain";
 import { formatDate } from "@/lib/format";
+import { runAction } from "@/lib/run-action";
+import { computeStatusOptions, type StatusOption } from "@/lib/task-status-flow";
+import { hasLoggedTime } from "@/lib/task-activity";
+import { statusLabel } from "@/lib/bug";
 
 // Data for the Dev/QA quick-edit drawer (PRD Agile Sprint enhancement). A read-only fetch
 // (via a server action so it can authorize with getCurrentUser) returning everything the
@@ -26,6 +30,10 @@ export type TaskDrawerData = {
   name: string;
   taskType: string;
   status: string;
+  /** Status name as this task type calls it (Bugs use Open / Fixed / Ready for Retest…). */
+  statusLabel: string;
+  /** Only the moves THIS user can actually make from the current status. */
+  statusOptions: StatusOption[];
   priority: string;
   severity: string | null;
   dueDateLabel: string;
@@ -55,9 +63,15 @@ export type TaskDrawerData = {
   viewerLocation: string;
 };
 
-export async function getTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
+/** Returns the drawer's data, or `{ ok: false, error }` with a plain-language reason (production
+ * would otherwise mask a thrown message as a generic server error — QA E-02). */
+export async function getTaskDrawerData(taskId: string) {
+  return runAction(() => loadTaskDrawerData(taskId));
+}
+
+async function loadTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+  if (!user) throw new Error("Your session has expired. Please sign in again.");
 
   const task = await prisma.task.findUnique({
     where: { id: taskId },
@@ -79,7 +93,7 @@ export async function getTaskDrawerData(taskId: string): Promise<TaskDrawerData>
       successorTask: { select: { id: true } },
     },
   });
-  if (!task) throw new Error("Task not found.");
+  if (!task) throw new Error("This task no longer exists.");
 
   const project = await prisma.project.findUnique({
     where: { id: task.projectId },
@@ -88,17 +102,24 @@ export async function getTaskDrawerData(taskId: string): Promise<TaskDrawerData>
       taskGroups: { select: { id: true, leadUserId: true, podId: true, pod: { select: { name: true, sprintWorkflowEnabled: true } } } },
     },
   });
-  if (!project) throw new Error("Project not found.");
+  if (!project) throw new Error("This task's project no longer exists.");
 
   if (!(await canViewTask(user, project, task))) {
     throw new Error("You don't have access to this task.");
   }
 
   const group = task.group;
+  const statusOptions = computeStatusOptions({
+    user,
+    task,
+    group,
+    hasLoggedTime: await hasLoggedTime(task.id),
+  });
   const assigneeCtx = await resolveTaskAssigneeContext(user, project, group, task);
 
   const sprintEnabledGroups = project.taskGroups.filter((g) => g.pod?.sprintWorkflowEnabled);
-  const canManageSprint = !!group?.pod?.sprintWorkflowEnabled && canManageSprints(user, project, sprintEnabledGroups);
+  const canManageSprint =
+    !!group?.pod?.sprintWorkflowEnabled && canAssignTaskToSprint(user, project, sprintEnabledGroups, task);
   const sprints = canManageSprint
     ? await prisma.sprint.findMany({
         where: { projectId: project.id, OR: [{ status: { not: "COMPLETED" } }, { id: task.sprintId ?? "" }] },
@@ -116,6 +137,8 @@ export async function getTaskDrawerData(taskId: string): Promise<TaskDrawerData>
     name: task.name,
     taskType: task.taskType,
     status: task.status,
+    statusLabel: statusLabel(task.status, task.taskType),
+    statusOptions,
     priority: task.priority,
     severity: task.severity,
     dueDateLabel: formatDate(task.dueDate),

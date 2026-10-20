@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageBugTracking } from "@/lib/permissions";
+import { runAction } from "@/lib/run-action";
 
 const schema = z.object({
   podId: z.string().min(1),
@@ -13,6 +14,7 @@ const schema = z.object({
 
 /** Toggle Bug Tracking for one discipline (pod) — Admin only (PRD 8.2.4). */
 export async function setPodBugTracking(formData: FormData) {
+  return runAction(async () => {
   const user = await getCurrentUser();
   if (!user || !canManageBugTracking(user)) {
     throw new Error("Only an Admin can manage Bug Tracking settings.");
@@ -30,4 +32,5 @@ export async function setPodBugTracking(formData: FormData) {
   });
 
   revalidatePath("/admin/bug-tracking");
+  });
 }

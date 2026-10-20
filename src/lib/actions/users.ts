@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/permissions";
 import { ROLE_VALUES, clusterIsOptional, isUnscopedRole } from "@/lib/user-roles";
+import { runAction } from "@/lib/run-action";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
@@ -28,6 +29,7 @@ const createUserSchema = z.object({
 });
 
 export async function createUser(formData: FormData) {
+  return runAction(async () => {
   await requireAdmin();
 
   const parsed = createUserSchema.safeParse({
@@ -78,6 +80,7 @@ export async function createUser(formData: FormData) {
 
   revalidatePath("/admin/users");
   redirect(`/admin/users/${user.id}`);
+  });
 }
 
 const updateUserSchema = z.object({
@@ -85,9 +88,49 @@ const updateUserSchema = z.object({
   email: z.string().email("Enter a valid email."),
   location: z.enum(["DUBAI", "INDIA"]),
   isActive: z.boolean(),
+  restrictToOwnTasks: z.boolean(),
 });
 
+const setPasswordSchema = z
+  .object({
+    newPassword: z.string().min(8, "Password must be at least 8 characters."),
+    confirmPassword: z.string().min(1, "Re-enter the new password."),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: "The two passwords don't match.",
+    path: ["confirmPassword"],
+  });
+
+/**
+ * Admin sets a new password for any user — no current password needed, since the point is helping
+ * someone who has forgotten theirs. Stored as a bcrypt hash like every other password. The user is
+ * not told by the app; the Admin passes the new password on and the user can change it themselves
+ * from their profile.
+ */
+export async function setUserPassword(userId: string, formData: FormData) {
+  return runAction(async () => {
+    await requireAdmin();
+
+    const parsed = setPasswordSchema.safeParse({
+      newPassword: formData.get("newPassword"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
+    }
+
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!target) throw new Error("This user no longer exists.");
+
+    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+    return { ok: true as const };
+  });
+}
+
 export async function updateUser(userId: string, formData: FormData) {
+  return runAction(async () => {
   await requireAdmin();
 
   const parsed = updateUserSchema.safeParse({
@@ -95,6 +138,7 @@ export async function updateUser(userId: string, formData: FormData) {
     email: formData.get("email"),
     location: formData.get("location"),
     isActive: formData.get("isActive") === "on",
+    restrictToOwnTasks: formData.get("restrictToOwnTasks") === "on",
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
@@ -112,6 +156,7 @@ export async function updateUser(userId: string, formData: FormData) {
 
   revalidatePath(`/admin/users/${userId}`);
   revalidatePath("/admin/users");
+  });
 }
 
 const roleSchema = z
@@ -139,6 +184,7 @@ const roleSchema = z
  * in place, here, to keep that invariant from the UI.
  */
 export async function changeUserRole(userId: string, userRoleId: string, formData: FormData) {
+  return runAction(async () => {
   await requireAdmin();
 
   const rawClusterId = formData.get("clusterId");
@@ -178,6 +224,7 @@ export async function changeUserRole(userId: string, userRoleId: string, formDat
   ]);
 
   revalidatePath(`/admin/users/${userId}`);
+  });
 }
 
 /**
@@ -191,6 +238,7 @@ export async function deleteUser(
   _prevState: { error?: string } | undefined,
   _formData: FormData,
 ): Promise<{ error?: string }> {
+  return runAction(async () => {
   const admin = await requireAdmin();
   if (userId === admin.id) {
     return { error: "You can't delete your own account." };
@@ -247,6 +295,7 @@ export async function deleteUser(
 
   revalidatePath("/admin/users");
   redirect("/admin/users");
+  });
 }
 
 /**
@@ -260,6 +309,7 @@ export async function reassignAndDeleteUser(
   _prevState: { error?: string } | undefined,
   formData: FormData,
 ): Promise<{ error?: string }> {
+  return runAction(async () => {
   const admin = await requireAdmin();
   const targetId = String(formData.get("targetUserId") ?? "");
 
@@ -321,4 +371,5 @@ export async function reassignAndDeleteUser(
 
   revalidatePath("/admin/users");
   redirect("/admin/users");
+  });
 }
