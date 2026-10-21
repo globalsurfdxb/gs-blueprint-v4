@@ -18,6 +18,13 @@ import {
 } from "@/lib/permissions";
 import { notifyUsers } from "@/lib/notifications";
 import { runAction } from "@/lib/run-action";
+import {
+  BLOB_NOT_READY_MESSAGE,
+  blobStorageReady,
+  imageFilesFrom,
+  prepareBugImages,
+  storeBugImages,
+} from "@/lib/bug-image-upload";
 
 const PRIORITY_VALUES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 const SEVERITY_VALUES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
@@ -192,7 +199,37 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
  * can close in place and the underlying view refreshes. */
 export async function createTaskInDrawer(projectId: string, formData: FormData) {
   return runAction(async () => {
-  await createTaskCore(projectId, formData);
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Your session has expired. Please sign in again.");
+
+    // Bug extras: up to 3 screenshots and/or a screenshot link. Checked BEFORE the bug is created, so
+    // a bad file or a missing storage setup stops the whole thing instead of leaving a half-made bug.
+    const isBug = formData.get("taskType") === "BUG";
+    const files = isBug ? imageFilesFrom(formData) : [];
+    const rawLink = isBug ? String(formData.get("screenshotLink") ?? "").trim() : "";
+    if (rawLink && !z.string().url().safeParse(rawLink).success) {
+      throw new Error("The screenshot link isn't a valid URL (it should start with https://).");
+    }
+    const prepared = await prepareBugImages(files);
+    if (prepared.length > 0 && !blobStorageReady()) throw new Error(BLOB_NOT_READY_MESSAGE);
+
+    const taskId = await createTaskCore(projectId, formData);
+
+    if (rawLink) {
+      await prisma.taskAttachment.create({
+        data: { taskId, url: rawLink, label: "Screenshot", addedById: user.id },
+      });
+    }
+    // The bug exists now; if storing the files fails, keep the bug and say what didn't make it.
+    let notice: string | undefined;
+    if (prepared.length > 0) {
+      try {
+        await storeBugImages(taskId, user.id, prepared);
+      } catch (err) {
+        notice = `Bug reported, but the screenshots weren't saved: ${err instanceof Error ? err.message : "upload failed"} You can add them from the bug.`;
+      }
+    }
+    return { ok: true as const, notice };
   });
 }
 

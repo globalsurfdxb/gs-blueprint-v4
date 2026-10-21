@@ -1,4 +1,5 @@
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { Select } from "@/components/select";
 
 function ReassignIcon({ className }: { className?: string }) {
   return (
@@ -36,7 +37,7 @@ export function ReassignTaskForm({
       <ActionForm action={action} successMessage="Task reassigned." className="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-gs-gray/15 bg-white p-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gs-gray">Assign To</label>
-          <select
+          <Select
             name="assignedToId"
             required
             defaultValue=""
@@ -48,7 +49,7 @@ export function ReassignTaskForm({
               .map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
-          </select>
+          </Select>
         </div>
         <SubmitButton
           pendingLabel="Reassigning…"

@@ -5,6 +5,7 @@ import { canSearch } from "@/lib/permissions";
 import { getSearchFilterOptions, runSearch, SORT_OPTIONS, type SearchParams } from "@/lib/search";
 import { statusLabel, SEVERITY_LABELS, SEVERITY_VALUES } from "@/lib/bug";
 import { PageHeader } from "@/components/page-header";
+import { Select } from "@/components/select";
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "NEW", label: "New" },
@@ -74,39 +75,39 @@ export default async function SearchPage({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Client</span>
-              <select name="clientId" defaultValue={params.clientId} className={fieldClass}>
+              <Select name="clientId" defaultValue={params.clientId} className={fieldClass}>
                 <option value="">All clients</option>
                 {options.clients.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Project</span>
-              <select name="projectId" defaultValue={params.projectId} className={fieldClass}>
+              <Select name="projectId" defaultValue={params.projectId} className={fieldClass}>
                 <option value="">All projects</option>
                 {options.projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Assigned To</span>
-              <select name="assignedToId" defaultValue={params.assignedToId} className={fieldClass}>
+              <Select name="assignedToId" defaultValue={params.assignedToId} className={fieldClass}>
                 <option value="">Anyone</option>
                 {options.assignees.map((a) => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Status</span>
-              <select name="status" defaultValue={params.status} className={fieldClass}>
+              <Select name="status" defaultValue={params.status} className={fieldClass}>
                 <option value="">Any status</option>
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Due From</span>
@@ -118,35 +119,35 @@ export default async function SearchPage({
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Timer Status</span>
-              <select name="timer" defaultValue={params.timer} className={fieldClass}>
+              <Select name="timer" defaultValue={params.timer} className={fieldClass}>
                 <option value="">Any</option>
                 <option value="running">Running</option>
                 <option value="notrunning">Not Running</option>
-              </select>
+              </Select>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Task Type</span>
-              <select name="taskType" defaultValue={params.taskType} className={fieldClass}>
+              <Select name="taskType" defaultValue={params.taskType} className={fieldClass}>
                 <option value="">Any</option>
                 <option value="STANDARD">Standard</option>
                 <option value="BUG">Bug</option>
-              </select>
+              </Select>
             </label>
             {params.taskType === "BUG" && (
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-gs-gray">Severity</span>
-                <select name="severity" defaultValue={params.severity} className={fieldClass}>
+                <Select name="severity" defaultValue={params.severity} className={fieldClass}>
                   <option value="">Any severity</option>
                   {SEVERITY_VALUES.map((s) => (
                     <option key={s} value={s}>{SEVERITY_LABELS[s]}</option>
                   ))}
-                </select>
+                </Select>
               </label>
             )}
             {options.sprintWorkflowInScope && (
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-gs-gray">Sprint</span>
-                <select name="sprint" defaultValue={params.sprint} className={fieldClass}>
+                <Select name="sprint" defaultValue={params.sprint} className={fieldClass}>
                   <option value="">Any</option>
                   <option value="active">Active Sprint</option>
                   <option value="backlog">Backlog</option>
@@ -157,16 +158,16 @@ export default async function SearchPage({
                       ))}
                     </optgroup>
                   )}
-                </select>
+                </Select>
               </label>
             )}
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Sort By</span>
-              <select name="sort" defaultValue={params.sort} className={fieldClass}>
+              <Select name="sort" defaultValue={params.sort} className={fieldClass}>
                 {SORT_OPTIONS.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
           <div className="flex flex-wrap gap-2">

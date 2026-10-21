@@ -5,8 +5,9 @@ import { useEffect, useState, useTransition } from "react";
 import { statusLabel } from "@/lib/bug";
 import { useToast } from "@/components/toast";
 import { changeTaskStatusByDrag } from "@/lib/actions/task-status";
-import { TaskOpener } from "@/components/task-drawer";
+import { TaskOpener, useTaskDrawer } from "@/components/task-drawer";
 import { isFailure, noticeOf, readableError } from "@/lib/action-result";
+import { Select } from "@/components/select";
 
 // A single task as the Kanban/Calendar renderers need it. The server sends this already
 // scoped to what the viewer may see — the view toggle NEVER changes the query, only the
@@ -34,6 +35,9 @@ export type ViewTask = {
   // Cross-project surfaces (My Tasks) set this so each card shows which project it belongs to;
   // single-project surfaces (a project board) leave it undefined and nothing extra renders.
   projectName?: string;
+  /** "Project · Client" — when set, boards that mix projects (Bugs) show it as its own line on each
+   * Kanban card and Calendar entry, so the project is always visible, not buried in the small print. */
+  projectLabel?: string;
 };
 
 type ViewMode = "list" | "kanban" | "calendar";
@@ -47,6 +51,14 @@ const COLUMNS: { status: string; label: string }[] = [
   { status: "REVIEW", label: "Review" },
   { status: "COMPLETED", label: "Completed" },
 ];
+
+// The same four columns, worded the way bugs are talked about (QA C-02).
+const BUG_COLUMN_LABELS: Record<string, string> = {
+  NEW: "Open",
+  IN_PROGRESS: "In Progress",
+  REVIEW: "Ready for Retest",
+  COMPLETED: "Closed",
+};
 
 const PRIORITY_DOT: Record<string, string> = {
   URGENT: "bg-gs-red",
@@ -100,7 +112,7 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // ---------- shared card bits ----------
 
-function CardMeta({ t }: { t: ViewTask }) {
+function CardMeta({ t, hideProject = false }: { t: ViewTask; hideProject?: boolean }) {
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-gs-gray">
       <span className="inline-flex items-center gap-1">
@@ -109,7 +121,7 @@ function CardMeta({ t }: { t: ViewTask }) {
       </span>
       <span>· {t.dueLabel}</span>
       {t.assigneeName && <span>· {t.assigneeName}</span>}
-      {t.projectName && <span className="font-medium text-gs-gray">· {t.projectName}</span>}
+      {!hideProject && (t.projectLabel ?? t.projectName) && <span className="font-medium text-gs-gray">· {t.projectLabel ?? t.projectName}</span>}
     </div>
   );
 }
@@ -144,9 +156,19 @@ function CardBadges({ t }: { t: ViewTask }) {
 
 // ---------- Kanban ----------
 
-function KanbanBoard({ tasks, surfacePath }: { tasks: ViewTask[]; surfacePath: string }) {
+export function KanbanBoard({
+  tasks,
+  surfacePath,
+  kind = "task",
+}: {
+  tasks: ViewTask[];
+  surfacePath: string;
+  /** "bug" words the columns Open / In Progress / Ready for Retest / Closed. */
+  kind?: "task" | "bug";
+}) {
   const { addToast } = useToast();
   const [pending, startTransition] = useTransition();
+  const drawer = useTaskDrawer();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overColumn, setOverColumn] = useState<string | null>(null);
 
@@ -179,7 +201,7 @@ function KanbanBoard({ tasks, surfacePath }: { tasks: ViewTask[]; surfacePath: s
   // defeats the point); at lg+ they lay out as a 4-column grid with no scroll.
   return (
     <div className={`flex gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-4 lg:overflow-x-visible lg:pb-0 ${pending ? "pointer-events-none opacity-60" : ""}`}>
-      {COLUMNS.map((col) => {
+      {COLUMNS.map((c) => ({ ...c, label: kind === "bug" ? BUG_COLUMN_LABELS[c.status] ?? c.label : c.label })).map((col) => {
         const colTasks = tasks.filter((t) => columnOf(t) === col.status);
         return (
           <div
@@ -198,11 +220,17 @@ function KanbanBoard({ tasks, surfacePath }: { tasks: ViewTask[]; surfacePath: s
               <span>{col.label}</span>
               <span className="rounded-full bg-white px-1.5 text-[10px]">{colTasks.length}</span>
             </div>
-            <div className="flex flex-col gap-2">
+            {/* A long column scrolls inside itself (header stays put) instead of stretching the page. */}
+            <div className="flex max-h-[26rem] flex-col gap-2 overflow-y-auto pr-0.5">
               {colTasks.map((t) => (
                 <div
                   key={t.id}
                   draggable={isDraggable(t)}
+                  // The whole card opens the task, not only its title (a drag never produces a click).
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest("a,button,input,select,textarea,label")) return;
+                    drawer?.openTask(t.id);
+                  }}
                   onDragStart={() => setDraggingId(t.id)}
                   onDragEnd={() => {
                     setDraggingId(null);
@@ -212,6 +240,11 @@ function KanbanBoard({ tasks, surfacePath }: { tasks: ViewTask[]; surfacePath: s
                     isDraggable(t) ? "cursor-grab active:cursor-grabbing" : ""
                   } ${draggingId === t.id ? "scale-[0.97] rotate-1 opacity-50" : ""} ${t.status === "COMPLETED" ? "bg-gs-light/60" : ""}`}
                 >
+                  {t.projectLabel && (
+                    <p className="mb-1 truncate text-[11px] font-semibold text-gs-gray" title={t.projectLabel}>
+                      {t.projectLabel}
+                    </p>
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <TaskOpener
                       taskId={t.id}
@@ -224,7 +257,7 @@ function KanbanBoard({ tasks, surfacePath }: { tasks: ViewTask[]; surfacePath: s
                   </div>
                   <div className="mt-1"><CardBadges t={t} /></div>
                   <p className="mt-1 text-[10px] font-medium uppercase text-gs-gray">{statusLabel(t.status, t.taskType)}</p>
-                  <CardMeta t={t} />
+                  <CardMeta t={t} hideProject={!!t.projectLabel} />
                 </div>
               ))}
               {colTasks.length === 0 && <p className="px-1 py-2 text-[11px] text-gs-gray/70">—</p>}
@@ -243,14 +276,19 @@ function CalendarEntry({ t }: { t: ViewTask }) {
     <TaskOpener
       taskId={t.id}
       projectId={t.projectId}
-      className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[11px] transition-colors duration-150 hover:bg-gs-red/10 hover:text-gs-red ${t.status === "COMPLETED" ? "text-gs-gray line-through decoration-gs-gray/40" : ""}`}
+      className={`flex w-full items-start gap-1 rounded px-1 py-0.5 text-left text-[11px] transition-colors duration-150 hover:bg-gs-red/10 hover:text-gs-red ${t.status === "COMPLETED" ? "text-gs-gray line-through decoration-gs-gray/40" : ""}`}
     >
       {t.status === "COMPLETED" ? (
         <span className="shrink-0 text-emerald-600 no-underline" aria-label="Completed">✓</span>
       ) : (
-        <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gs-gray"}`} aria-hidden />
+        <span className={`mt-1 inline-block h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gs-gray"}`} aria-hidden />
       )}
-      <span className="truncate">{t.name}</span>
+      <span className="min-w-0 flex-1" title={t.projectLabel ? `${t.name} — ${t.projectLabel}` : t.name}>
+        <span className="block truncate">{t.name}</span>
+        {t.projectLabel && (
+          <span className="block truncate text-[10px] font-normal text-gs-gray no-underline">{t.projectLabel}</span>
+        )}
+      </span>
     </TaskOpener>
   );
 }
@@ -419,7 +457,7 @@ function FilterSelect({
   options: [string, string][];
 }) {
   return (
-    <select
+    <Select
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -428,7 +466,7 @@ function FilterSelect({
       {options.map(([v, l]) => (
         <option key={v} value={v}>{l}</option>
       ))}
-    </select>
+    </Select>
   );
 }
 
@@ -451,6 +489,9 @@ export function TaskViews({
   tasks,
   todayKey,
   sprintFilterEnabled = false,
+  showFilters = true,
+  kind = "task",
+  kanbanView,
   focusSprint,
   extraView,
   children,
@@ -461,6 +502,14 @@ export function TaskViews({
   /** When true (a scope with Sprint Workflow enabled), the Kanban gets an optional
    * "Active Sprint only" filter (PRD 8.14). Invisible everywhere else. */
   sprintFilterEnabled?: boolean;
+  /** Show the built-in Kanban/Calendar filter row. A surface that filters the whole page on the
+   * server (My Tasks) turns it off so there is one set of filters, not two. */
+  showFilters?: boolean;
+  /** "bug" words the Kanban columns for bugs (Open / In Progress / Ready for Retest / Closed). */
+  kind?: "task" | "bug";
+  /** Replaces the single Kanban board with a surface-specific one (the Bugs page shows one board per
+   * project). Server-rendered node; it receives no filters of its own. */
+  kanbanView?: React.ReactNode;
   /** Sprint-wise board (final build): when set, the whole view collapses to a single Kanban
    * scoped to just this sprint's tasks — opened from a Sprint card. The view toggle and the
    * "Active Sprint only" filter step aside; a banner links back to the full board. */
@@ -568,7 +617,7 @@ export function TaskViews({
             Active Sprint only
           </label>
         )}
-        {(mode === "kanban" || mode === "calendar") && (
+        {showFilters && (mode === "kanban" || mode === "calendar") && (
           <div className="flex flex-wrap items-center gap-2">
             <FilterSelect
               label="Status"
@@ -635,7 +684,7 @@ export function TaskViews({
 
       <div key={mode} className="view-enter">
         {mode === "list" && children}
-        {mode === "kanban" && <KanbanBoard tasks={kanbanTasks} surfacePath={surfacePath} />}
+        {mode === "kanban" && (kanbanView ?? <KanbanBoard tasks={kanbanTasks} surfacePath={surfacePath} kind={kind} />)}
         {mode === "calendar" && <CalendarView tasks={filteredTasks} todayKey={todayKey} />}
         {extraView && mode === extraView.mode && extraView.content}
       </div>

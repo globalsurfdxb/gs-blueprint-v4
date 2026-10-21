@@ -48,7 +48,7 @@ import {
 } from "@/lib/actions/project-attachments";
 import { formatDuration, secondsSince } from "@/lib/format";
 import { daysOverdue } from "@/lib/timezone";
-import { createSprint, updateSprint, setSprintStatus } from "@/lib/actions/sprints";
+import { addTasksToSprint, createSprint, updateSprint, setSprintStatus } from "@/lib/actions/sprints";
 import { setTeamCapacity } from "@/lib/actions/team-capacity";
 import { createMilestone, updateMilestone, toggleMilestone, reorderMilestone, deleteMilestone } from "@/lib/actions/milestones";
 import { MilestonesSection } from "./milestones-section";
@@ -56,6 +56,7 @@ import { ProjectEditForm } from "./project-edit-form";
 import { TaskGroupsSection } from "./task-groups-section";
 import { SprintsSection } from "./sprints-section";
 import { TaskViews, type ViewTask } from "@/components/task-views";
+import { countSprintTasks, sprintCountsFor } from "@/lib/sprint-dashboard";
 import { TaskDrawerProvider } from "@/components/task-drawer";
 import { ProjectAttachmentsSection } from "./attachments-section";
 import { ProjectStatusChip } from "@/components/status-chip";
@@ -277,6 +278,31 @@ export default async function ProjectDetailPage({
   // real sprint on this project counts; anything else falls back to the full board.
   const focusSprint = sprintParam ? sprints.find((s) => s.id === sprintParam) ?? null : null;
 
+  // Sprints tab: per-sprint task counts for the progress bars, and which sprint's board is shown
+  // underneath — the one picked (?sprint=), else the Active sprint, else the first not-completed one.
+  const sprintCounts = await countSprintTasks(sprints.map((sp) => sp.id));
+  const sprintsByRelevance = [...sprints].sort(
+    (a, b) =>
+      ({ ACTIVE: 0, PLANNED: 1, COMPLETED: 2 })[a.status] - ({ ACTIVE: 0, PLANNED: 1, COMPLETED: 2 })[b.status] ||
+      a.startDate.getTime() - b.startDate.getTime(),
+  );
+  const selectedSprint = focusSprint ?? sprintsByRelevance[0] ?? null;
+
+  const sprintTiming = (st: (typeof sprints)[number]) => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const daysTo = (d: Date) => Math.ceil((d.getTime() - now.getTime()) / DAY);
+    const plural = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+    if (st.status === "COMPLETED") return { label: "Completed", tone: "muted" as const };
+    if (st.status === "PLANNED") {
+      const n = daysTo(st.startDate);
+      return n > 0 ? { label: `Starts in ${plural(n)}`, tone: "muted" as const } : { label: "Ready to start", tone: "warn" as const };
+    }
+    const left = daysTo(st.endDate);
+    if (left < 0) return { label: `Ended ${plural(-left)} ago`, tone: "late" as const };
+    if (left <= 2) return { label: left === 0 ? "Ends today" : `${plural(left)} left`, tone: "warn" as const };
+    return { label: `${plural(left)} left`, tone: "ok" as const };
+  };
+
   // Project Milestones (PRD — agency-wide): an ordered checklist for every project, managed by
   // the project-management tier and read-only for everyone else who can see the project.
   const canManageMilestonesHere = canManageMilestones(user, project);
@@ -397,14 +423,42 @@ export default async function ProjectDetailPage({
   const editProjectAttachmentWithId = editProjectAttachment.bind(null, project.id);
   const deleteProjectAttachmentWithId = deleteProjectAttachment.bind(null, project.id);
 
-  const activeTab = tabParam === "overview" ? "overview" : "tasks";
+  // Existing tasks this person could put into a sprint: top-level, not completed, in a Sprint-enabled
+  // group, either in the backlog or in another open sprint, and ones they may move (a Sprint manager
+  // sees all they can see; anyone else only their own).
+  const sprintById = new Map(sprints.map((sp) => [sp.id, sp]));
+  const sprintCandidates = groupCards
+    .filter((c) => c.group.pod?.sprintWorkflowEnabled)
+    .flatMap((c) => c.shownTasks.map((t) => ({ t, groupName: c.group.name })))
+    .filter(({ t }) => {
+      if (t.status === "COMPLETED") return false;
+      if (!(canManageSprintsHere || t.assignedToId === user.id || t.createdById === user.id)) return false;
+      const current = t.sprintId ? sprintById.get(t.sprintId) : null;
+      return !current || current.status !== "COMPLETED";
+    })
+    .map(({ t, groupName }) => ({
+      id: t.id,
+      name: t.name,
+      groupName,
+      assigneeName: t.assignedTo?.name ?? null,
+      sprintId: t.sprintId ?? null,
+      sprintName: t.sprintId ? sprintById.get(t.sprintId)?.name ?? null : null,
+    }))
+    .sort((a, b) => Number(!!a.sprintId) - Number(!!b.sprintId) || a.name.localeCompare(b.name));
+
+  // Sprints get their own tab, shown only when this project has a Sprint-enabled discipline.
+  const activeTab =
+    tabParam === "overview" ? "overview" : tabParam === "sprints" && hasSprintWorkflow ? "sprints" : "tasks";
   const taskCount = flatViewTasks.length;
   const deadlinePassed =
     !!project.deadline && project.deadline < now && project.status !== "COMPLETED" && project.status !== "CANCELLED";
-  const tabs = [
+  const tabs: { key: string; label: string; href: string; count: number | undefined }[] = [
     { key: "tasks", label: "Tasks", href: `/projects/${project.id}`, count: taskCount },
+    ...(hasSprintWorkflow
+      ? [{ key: "sprints", label: "Sprints", href: `/projects/${project.id}?tab=sprints`, count: sprints.length }]
+      : []),
     { key: "overview", label: "Overview", href: `/projects/${project.id}?tab=overview`, count: undefined },
-  ] as const;
+  ];
 
   return (
     // Wider than a single reading column — the Task Group tables below have 6 columns
@@ -490,27 +544,6 @@ export default async function ProjectDetailPage({
 
       {activeTab === "tasks" ? (
         <div className="pt-2">
-          {hasSprintWorkflow && (
-            <SprintsSection
-              projectId={project.id}
-              canManage={canManageSprintsHere}
-              createAction={createSprintWithId}
-              updateAction={updateSprint}
-              setStatusAction={setSprintStatus}
-              sprints={sprints.map((s) => ({
-                id: s.id,
-                name: s.name,
-                status: s.status,
-                startLabel: formatDate(s.startDate),
-                endLabel: formatDate(s.endDate),
-                startInput: s.startDate.toISOString().slice(0, 10),
-                endInput: s.endDate.toISOString().slice(0, 10),
-                taskCount: s._count.tasks,
-                datesLocked: s.status !== "PLANNED",
-              }))}
-            />
-          )}
-
           <TaskDrawerProvider>
           <TaskViews
             surfacePath={`/projects/${project.id}`}
@@ -547,6 +580,41 @@ export default async function ProjectDetailPage({
             />
           </TaskViews>
           </TaskDrawerProvider>
+        </div>
+      ) : activeTab === "sprints" ? (
+        <div className="pt-4">
+          {/* Each sprint is an expandable panel with its own board. The sprint picked in the URL
+              (?sprint=, e.g. from the Sprints menu) starts open; otherwise the Active one does. */}
+          <SprintsSection
+            surfacePath={`/projects/${project.id}`}
+            defaultOpenId={selectedSprint?.id ?? null}
+            canManage={canManageSprintsHere}
+            createAction={createSprintWithId}
+            updateAction={updateSprint}
+            setStatusAction={setSprintStatus}
+            addTasksAction={addTasksToSprint}
+            candidates={sprintCandidates}
+            tasksBySprint={Object.fromEntries(
+              sprintsByRelevance.map((sp) => [sp.id, flatViewTasks.filter((t) => t.sprintId === sp.id)]),
+            )}
+            sprints={sprintsByRelevance.map((sp) => {
+              const timing = sprintTiming(sp);
+              return {
+                id: sp.id,
+                name: sp.name,
+                status: sp.status,
+                startLabel: formatDate(sp.startDate),
+                endLabel: formatDate(sp.endDate),
+                startInput: sp.startDate.toISOString().slice(0, 10),
+                endInput: sp.endDate.toISOString().slice(0, 10),
+                taskCount: sp._count.tasks,
+                datesLocked: sp.status !== "PLANNED",
+                counts: sprintCountsFor(sprintCounts, sp.id),
+                timingLabel: timing.label,
+                timingTone: timing.tone,
+              };
+            })}
+          />
         </div>
       ) : (
         <div className="pt-2">

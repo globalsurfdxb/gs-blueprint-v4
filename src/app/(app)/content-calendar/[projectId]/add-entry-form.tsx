@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { formatDate } from "@/lib/format";
+import { Select } from "@/components/select";
 
 type ContentType = { id: string; name: string; contentLeadTimeDays: number };
 
@@ -67,7 +68,7 @@ export function AddEntryForm({
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="contentTypeId" className="text-sm font-medium">Content Type</label>
-          <select
+          <Select
             id="contentTypeId"
             name="contentTypeId"
             required
@@ -85,7 +86,7 @@ export function AddEntryForm({
             {contentTypes.map((ct) => (
               <option key={ct.id} value={ct.id}>{ct.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
       {selectedContentType && (

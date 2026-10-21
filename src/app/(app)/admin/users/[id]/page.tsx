@@ -8,6 +8,7 @@ import { DeleteUserButton } from "./delete-user-button";
 import { ReassignDeleteForm } from "./reassign-delete-form";
 import { PageHeader } from "@/components/page-header";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { Select } from "@/components/select";
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Admin",
@@ -92,7 +93,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="location" className="text-sm font-medium">Location</label>
-          <select
+          <Select
             id="location"
             name="location"
             defaultValue={user.location}
@@ -100,7 +101,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
           >
             <option value="DUBAI">Dubai</option>
             <option value="INDIA">India</option>
-          </select>
+          </Select>
         </div>
 
         <label className="flex items-center gap-2 text-sm font-medium">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Select } from "@/components/select";
 
 type ClusterWithPods = {
   id: string;
@@ -36,7 +37,7 @@ export function RoleFields({ clusters }: { clusters: ClusterWithPods[] }) {
     <div className="flex flex-col gap-4 rounded-md border border-gs-gray/15 bg-gs-light p-4">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="role" className="text-sm font-medium">Role</label>
-        <select
+        <Select
           id="role"
           name="role"
           value={role}
@@ -49,13 +50,13 @@ export function RoleFields({ clusters }: { clusters: ClusterWithPods[] }) {
               {r.label}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {needsCluster && (
         <div className="flex flex-col gap-1.5">
           <label htmlFor="clusterId" className="text-sm font-medium">Cluster</label>
-          <select
+          <Select
             id="clusterId"
             name="clusterId"
             value={clusterId}
@@ -71,7 +72,7 @@ export function RoleFields({ clusters }: { clusters: ClusterWithPods[] }) {
             {clusters.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
-          </select>
+          </Select>
           {clusterOptional && (
             <p className="text-xs text-gs-gray">
               Leave as coordinator for a Dependency Tracker (ACS ceiling, no automatic visibility); pick a
@@ -84,7 +85,7 @@ export function RoleFields({ clusters }: { clusters: ClusterWithPods[] }) {
       {needsCluster && canHavePod && selectedCluster && selectedCluster.pods.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <label htmlFor="podId" className="text-sm font-medium">Pod (optional)</label>
-          <select
+          <Select
             id="podId"
             name="podId"
             defaultValue=""
@@ -94,7 +95,7 @@ export function RoleFields({ clusters }: { clusters: ClusterWithPods[] }) {
             {selectedCluster.pods.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
 

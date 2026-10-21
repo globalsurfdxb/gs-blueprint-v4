@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ActionForm } from "@/components/action-form";
 import { SaveButton } from "@/components/save-button";
+import { Select } from "@/components/select";
 
 type ClientDefaults = {
   name?: string;
@@ -45,12 +46,12 @@ export function ClientForm({
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="industry" className="text-sm font-medium">Industry</label>
-        <select id="industry" name="industry" defaultValue={current} className="field">
+        <Select id="industry" name="industry" defaultValue={current} className="field">
           <option value="">Not specified</option>
           {options.map((name) => (
             <option key={name} value={name}>{name}</option>
           ))}
-        </select>
+        </Select>
         {canManageIndustries && (
           <p className="text-xs text-gs-gray">
             Need another option?{" "}

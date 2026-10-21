@@ -13,6 +13,7 @@ import {
 } from "@/lib/dependency-data";
 import { DependencyProjectGroups } from "@/components/dependency-project-groups";
 import { PageHeader } from "@/components/page-header";
+import { Select } from "@/components/select";
 
 /**
  * Dependency Tracker list — the filterable ACTIVE cross-department queue for a view-only
@@ -102,30 +103,30 @@ Active cross-department work on the projects you coordinate — view only. Compl
         {stuckOn && <input type="hidden" name="stuck" value="1" />}
         <div className="flex flex-col gap-1">
           <label htmlFor="project" className="text-xs font-medium text-gs-gray">Project</label>
-          <select id="project" name="project" defaultValue={projectParam} className="field field-sm">
+          <Select id="project" name="project" defaultValue={projectParam} className="field field-sm">
             <option value="">All projects</option>
             {projectOptions.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="status" className="text-xs font-medium text-gs-gray">Status</label>
-          <select id="status" name="status" defaultValue={validStatus ?? ""} className="field field-sm">
+          <Select id="status" name="status" defaultValue={validStatus ?? ""} className="field field-sm">
             <option value="">Any active</option>
             {ACTIVE_STATUSES.map((s) => (
               <option key={s} value={s}>{STATUS_LABELS[s]}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="due" className="text-xs font-medium text-gs-gray">Due</label>
-          <select id="due" name="due" defaultValue={due} className="field field-sm">
+          <Select id="due" name="due" defaultValue={due} className="field field-sm">
             <option value="">Any time</option>
             <option value="week">This week</option>
             <option value="month">This month</option>
             <option value="custom">Custom range</option>
-          </select>
+          </Select>
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="from" className="text-xs font-medium text-gs-gray">From</label>

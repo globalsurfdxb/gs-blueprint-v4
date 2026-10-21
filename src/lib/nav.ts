@@ -37,7 +37,7 @@ export function getQuickCreateItems(user: CurrentUser): NavItem[] {
 
 /** The Studio Intake Queue lands in a later sprint per the PRD's build sequence (Section 13);
  * Dashboards, Reports, and Search arrived in Sprint 3. */
-export function getNavItems(user: CurrentUser, opts: { isDependencyTracker?: boolean } = {}): NavItem[] {
+export function getNavItems(user: CurrentUser, opts: { isDependencyTracker?: boolean; hasSprints?: boolean; hasBugs?: boolean } = {}): NavItem[] {
   // A view-only Dependency Tracker coordinator (cluster-less ACS, e.g. Vidhukrishna) has no
   // delivery involvement — Projects, My Tasks and Clients would all be empty for them. Their
   // only surface is the Dependency Tracker, so give them just that rather than dead-end tabs.
@@ -66,6 +66,16 @@ export function getNavItems(user: CurrentUser, opts: { isDependencyTracker?: boo
   items.push({ label: "Projects", href: "/projects" });
   if (hasPersonalTaskList(user)) {
     items.push({ label: "My Tasks", href: "/my-tasks" });
+  }
+
+  // Sprints: only for people who actually have sprint work (a Sprint-enabled project in scope).
+  if (opts.hasSprints) {
+    items.push({ label: "Sprints", href: "/sprints" });
+  }
+
+  // Bugs: for the teams that have Bug Tracking switched on (see getBugAccess).
+  if (opts.hasBugs) {
+    items.push({ label: "Bugs", href: "/bugs" });
   }
 
   if (isLead(user)) {

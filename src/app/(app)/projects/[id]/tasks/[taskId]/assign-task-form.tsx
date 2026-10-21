@@ -1,4 +1,5 @@
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { Select } from "@/components/select";
 
 export function AssignTaskForm({
   assignees,
@@ -15,12 +16,12 @@ export function AssignTaskForm({
     >
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-gs-gray">Assign To</label>
-        <select name="assignedToId" required defaultValue="" className="field">
+        <Select name="assignedToId" required defaultValue="" className="field">
           <option value="" disabled>Select one person</option>
           {assignees.map((a) => (
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}
-        </select>
+        </Select>
       </div>
       <SubmitButton
         pendingLabel="Assigning…"

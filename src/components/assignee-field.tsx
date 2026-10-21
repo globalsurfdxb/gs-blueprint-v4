@@ -1,6 +1,7 @@
 "use client";
 
 import { useTaskType } from "./task-type-context";
+import { Select } from "@/components/select";
 
 const fieldClass =
   "field";
@@ -45,12 +46,12 @@ export function AssigneeField({
       <label htmlFor="assignedToId" className="text-sm font-medium">Assigned To</label>
       {/* defaultValue="" keeps the placeholder selected: without it the browser silently picks the
           first listed person (usually the Lead), so tasks were assigned by accident (QA F-05). */}
-      <select id="assignedToId" name="assignedToId" required defaultValue="" className={fieldClass}>
+      <Select id="assignedToId" name="assignedToId" required defaultValue="" className={fieldClass}>
         <option value="" disabled>Select one person</option>
         {assignees.map((a) => (
           <option key={a.id} value={a.id}>{a.name}</option>
         ))}
-      </select>
+      </Select>
       <p className="text-xs text-gs-gray">Every task has exactly one owner — no multi-assignee tasks.</p>
     </div>
   );

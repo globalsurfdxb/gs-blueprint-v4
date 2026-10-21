@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { CurrentUser } from "@/lib/auth";
-import { isAdmin, isClusterHeadOf, getClusterHeadPodRestriction } from "@/lib/permissions";
+import { isAdmin, isClusterHeadOf, getClusterHeadPodRestriction, canManageSprints } from "@/lib/permissions";
 import { isBottleneck } from "@/lib/dashboard";
 import { daysOverdue } from "@/lib/timezone";
 import { secondsSince } from "@/lib/format";
@@ -37,8 +37,9 @@ export type SprintProgressData = {
   workload: SprintWorkloadRow[]; // per-person, across ACTIVE-sprint tasks in scope
 };
 
-/** Which of the candidate Sprint-enabled groups fall in this viewer's oversight scope. */
-function groupInScope(
+/** Which of the candidate task groups fall in this viewer's oversight scope (Admin, the cluster's
+ * Cluster Head, or the Lead who owns the group). Shared by Sprints and Bugs. */
+export function groupInScope(
   user: CurrentUser,
   g: { leadUserId: string; clusterId: string | null; podId: string | null; project: { clusterId: string } },
 ): boolean {
@@ -169,4 +170,150 @@ export async function getSprintProgressData(user: CurrentUser): Promise<SprintPr
   const workload = Array.from(workloadByUser.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   return { inScope: true, sprints, workload };
+}
+
+/**
+ * Projects whose sprints this person should see in the "Sprints" menu: every Sprint-enabled
+ * project in their oversight scope (Admin / Cluster Head / the Lead who owns the group), plus any
+ * project where they hold a task in a Sprint-enabled discipline (a Contributor's own sprint work).
+ * Empty = the Sprints menu item is hidden.
+ */
+export async function getSprintProjectIds(user: CurrentUser): Promise<string[]> {
+  const [groups, ownTasks] = await Promise.all([
+    prisma.taskGroup.findMany({
+      where: { pod: { sprintWorkflowEnabled: true }, project: { archivedAt: null } },
+      select: {
+        leadUserId: true,
+        clusterId: true,
+        podId: true,
+        project: { select: { id: true, clusterId: true } },
+      },
+    }),
+    prisma.task.findMany({
+      where: {
+        assignedToId: user.id,
+        group: { pod: { sprintWorkflowEnabled: true } },
+        project: { archivedAt: null },
+      },
+      select: { projectId: true },
+      distinct: ["projectId"],
+    }),
+  ]);
+  const ids = new Set(groups.filter((g) => groupInScope(user, g)).map((g) => g.project.id));
+  for (const t of ownTasks) ids.add(t.projectId);
+  return Array.from(ids);
+}
+
+/** Top-level tasks in a sprint, bucketed for the progress bar. On Hold counts as not started. */
+export type SprintCounts = {
+  notStarted: number;
+  inProgress: number;
+  review: number;
+  completed: number;
+  total: number;
+};
+
+const EMPTY_COUNTS: SprintCounts = { notStarted: 0, inProgress: 0, review: 0, completed: 0, total: 0 };
+
+/** Per-sprint task counts by status. Subtasks are personal breakdowns, so they are not counted. */
+export async function countSprintTasks(sprintIds: string[]): Promise<Map<string, SprintCounts>> {
+  const out = new Map<string, SprintCounts>();
+  if (sprintIds.length === 0) return out;
+  const rows = await prisma.task.groupBy({
+    by: ["sprintId", "status"],
+    where: { sprintId: { in: sprintIds }, parentTaskId: null },
+    _count: { _all: true },
+  });
+  for (const r of rows) {
+    if (!r.sprintId) continue;
+    const c = out.get(r.sprintId) ?? { ...EMPTY_COUNTS };
+    const n = r._count._all;
+    c.total += n;
+    if (r.status === "COMPLETED") c.completed += n;
+    else if (r.status === "REVIEW") c.review += n;
+    else if (r.status === "IN_PROGRESS" || r.status === "REVISION") c.inProgress += n;
+    else c.notStarted += n; // NEW, ON_HOLD
+    out.set(r.sprintId, c);
+  }
+  return out;
+}
+
+export function sprintCountsFor(map: Map<string, SprintCounts>, id: string): SprintCounts {
+  return map.get(id) ?? { ...EMPTY_COUNTS };
+}
+
+export type SprintListRow = {
+  id: string;
+  name: string;
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  status: "PLANNED" | "ACTIVE" | "COMPLETED";
+  startDate: Date;
+  endDate: Date;
+  counts: SprintCounts;
+  totalTasks: number;
+  completedTasks: number;
+  completionPct: number;
+};
+
+/** Every sprint (any status) on the given projects, with completion counts, Active first. */
+export async function getSprintList(projectIds: string[]): Promise<SprintListRow[]> {
+  if (projectIds.length === 0) return [];
+  const sprints = await prisma.sprint.findMany({
+    where: { projectId: { in: projectIds } },
+    include: { project: { select: { name: true, client: { select: { name: true } } } } },
+  });
+  const counts = await countSprintTasks(sprints.map((s) => s.id));
+  const order = { ACTIVE: 0, PLANNED: 1, COMPLETED: 2 } as const;
+  return sprints
+    .map((s) => {
+      const c = sprintCountsFor(counts, s.id);
+      return {
+        id: s.id,
+        name: s.name,
+        projectId: s.projectId,
+        projectName: s.project.name,
+        clientName: s.project.client.name,
+        status: s.status,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        counts: c,
+        totalTasks: c.total,
+        completedTasks: c.completed,
+        completionPct: c.total > 0 ? Math.round((c.completed / c.total) * 100) : 0,
+      };
+    })
+    .sort(
+      (a, b) =>
+        order[a.status] - order[b.status] ||
+        a.projectName.localeCompare(b.projectName) ||
+        a.startDate.getTime() - b.startDate.getTime(),
+    );
+}
+
+/**
+ * Projects this person can create sprints in from the Sprints page: Sprint-enabled projects they
+ * oversee or lead (same rule as the project's own "+ New Sprint": Admin, the project's Cluster Head,
+ * or the Lead of a Sprint-enabled group). A Contributor sees sprints but cannot create them.
+ */
+export async function getManageableSprintProjects(
+  user: CurrentUser,
+  projectIds: string[],
+): Promise<{ id: string; name: string; clientName: string }[]> {
+  if (projectIds.length === 0) return [];
+  const projects = await prisma.project.findMany({
+    where: { id: { in: projectIds }, archivedAt: null, status: { not: "COMPLETED" } },
+    include: {
+      client: { select: { name: true } },
+      taskGroups: { include: { pod: { select: { name: true, sprintWorkflowEnabled: true } } } },
+    },
+    orderBy: { name: "asc" },
+  });
+  return projects
+    .filter((p) => {
+      const sprintGroups = p.taskGroups.filter((g) => g.pod?.sprintWorkflowEnabled);
+      return sprintGroups.length > 0 && canManageSprints(user, p, sprintGroups);
+    })
+    .map((p) => ({ id: p.id, name: p.name, clientName: p.client.name }));
 }

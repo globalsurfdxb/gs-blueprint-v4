@@ -25,6 +25,39 @@ async function loadProjectForSprintAuth(projectId: string) {
   return { project, sprintEnabledGroups };
 }
 
+/**
+ * Move existing tasks into a sprint. Each must belong to the sprint's project and a Sprint-enabled
+ * discipline, and the person must be allowed to move THAT task (a Sprint manager, or its
+ * assignee/creator — the rule on the task's own Sprint field). Others are skipped and counted.
+ */
+async function moveTasksIntoSprint(
+  user: NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>,
+  sprint: { id: string; projectId: string },
+  loaded: NonNullable<Awaited<ReturnType<typeof loadProjectForSprintAuth>>>,
+  taskIds: string[],
+) {
+  if (taskIds.length === 0) return { added: 0, skipped: 0 };
+  const tasks = await prisma.task.findMany({
+    where: { id: { in: taskIds }, projectId: sprint.projectId, parentTaskId: null },
+    include: { group: { include: { pod: { select: { sprintWorkflowEnabled: true } } } } },
+  });
+  const allowed = tasks.filter(
+    (t) =>
+      t.status !== "COMPLETED" &&
+      !!t.group?.pod?.sprintWorkflowEnabled &&
+      canAssignTaskToSprint(user, loaded.project, loaded.sprintEnabledGroups, t),
+  );
+  if (allowed.length > 0) {
+    await prisma.task.updateMany({ where: { id: { in: allowed.map((t) => t.id) } }, data: { sprintId: sprint.id } });
+  }
+  return { added: allowed.length, skipped: taskIds.length - allowed.length };
+}
+
+const skippedNotice = (skipped: number) =>
+  skipped > 0
+    ? `${skipped} task${skipped === 1 ? " was" : "s were"} skipped (no permission or already completed).`
+    : undefined;
+
 const createSchema = z
   .object({
     name: z.string().trim().min(1, "Sprint name is required.").max(120),
@@ -57,7 +90,7 @@ export async function createSprint(projectId: string, formData: FormData) {
   });
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
 
-  await prisma.sprint.create({
+  const sprint = await prisma.sprint.create({
     data: {
       projectId,
       name: parsed.data.name,
@@ -67,7 +100,13 @@ export async function createSprint(projectId: string, formData: FormData) {
     },
   });
 
+  // Optionally put existing tasks straight into the new sprint ("add to new").
+  const taskIds = Array.from(new Set(formData.getAll("taskId").map(String).filter(Boolean)));
+  const { added, skipped } = await moveTasksIntoSprint(user, sprint, loaded, taskIds);
+
   revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/sprints");
+  return { ok: true as const, added, sprintId: sprint.id, notice: skippedNotice(skipped) };
   });
 }
 
@@ -116,6 +155,7 @@ export async function updateSprint(sprintId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${sprint.projectId}`);
+  revalidatePath("/sprints");
   });
 }
 
@@ -143,6 +183,7 @@ export async function setSprintStatus(sprintId: string, formData: FormData) {
   });
 
   revalidatePath(`/projects/${sprint.projectId}`);
+  revalidatePath("/sprints");
   });
 }
 
@@ -187,5 +228,39 @@ export async function setTaskSprint(taskId: string, formData: FormData) {
 
   revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
   revalidatePath(`/projects/${task.projectId}`);
+  revalidatePath("/sprints");
+  });
+}
+
+/**
+ * Put several existing tasks into a Sprint in one go (the "Add tasks" picker on a sprint). Each task
+ * must belong to this sprint's project and a Sprint-enabled discipline, and the person must be
+ * allowed to move THAT task (a Sprint manager, or the task's assignee/creator — same rule as the
+ * task's own Sprint field). Tasks they may not move are skipped and reported; a Completed sprint
+ * takes no new tasks.
+ */
+export async function addTasksToSprint(sprintId: string, formData: FormData) {
+  return runAction(async () => {
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Your session has expired. Please sign in again.");
+
+    const sprint = await prisma.sprint.findUnique({ where: { id: sprintId } });
+    if (!sprint) throw new Error("This sprint no longer exists.");
+    if (sprint.status === "COMPLETED") throw new Error("This sprint is completed — reopen it before adding tasks.");
+
+    const taskIds = Array.from(new Set(formData.getAll("taskId").map(String).filter(Boolean)));
+    if (taskIds.length === 0) throw new Error("Tick at least one task to add.");
+
+    const loaded = await loadProjectForSprintAuth(sprint.projectId);
+    if (!loaded) throw new Error("This sprint's project no longer exists.");
+
+    const { added, skipped } = await moveTasksIntoSprint(user, sprint, loaded, taskIds);
+    if (added === 0) {
+      throw new Error("None of the selected tasks can be added — you can only move tasks you manage or own.");
+    }
+
+    revalidatePath(`/projects/${sprint.projectId}`);
+    revalidatePath("/sprints");
+    return { ok: true as const, added, notice: skippedNotice(skipped) };
   });
 }

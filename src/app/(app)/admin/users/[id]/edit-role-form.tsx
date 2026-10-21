@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ActionForm } from "@/components/action-form";
 import { SaveButton } from "@/components/save-button";
+import { Select } from "@/components/select";
 
 type ClusterWithPods = {
   id: string;
@@ -46,7 +47,7 @@ export function EditRoleForm({
     <ActionForm action={action} successMessage="Role updated." className="flex flex-wrap items-end gap-3">
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-gs-gray">Role</label>
-        <select
+        <Select
           name="role"
           value={role}
           onChange={(e) => setRole(e.target.value)}
@@ -57,13 +58,13 @@ export function EditRoleForm({
               {r.label}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {needsCluster && (
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gs-gray">Cluster</label>
-          <select
+          <Select
             name="clusterId"
             value={clusterId}
             onChange={(e) => setClusterId(e.target.value)}
@@ -82,14 +83,14 @@ export function EditRoleForm({
                 {c.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
 
       {needsCluster && canHavePod && selectedCluster && selectedCluster.pods.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gs-gray">Pod</label>
-          <select
+          <Select
             name="podId"
             defaultValue={defaults.podId ?? ""}
             className="field"
@@ -100,7 +101,7 @@ export function EditRoleForm({
                 {p.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
 

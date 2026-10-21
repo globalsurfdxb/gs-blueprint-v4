@@ -14,7 +14,14 @@ export function useTaskType() {
   return useContext(TaskTypeContext);
 }
 
-export function TaskTypeProvider({ children }: { children: React.ReactNode }) {
-  const [taskType, setTaskType] = useState("STANDARD");
+export function TaskTypeProvider({
+  children,
+  initialType = "STANDARD",
+}: {
+  children: React.ReactNode;
+  /** "BUG" when the form was opened from "Report a bug", so Bug is already selected. */
+  initialType?: "STANDARD" | "BUG";
+}) {
+  const [taskType, setTaskType] = useState<string>(initialType);
   return <TaskTypeContext.Provider value={{ taskType, setTaskType }}>{children}</TaskTypeContext.Provider>;
 }

@@ -52,6 +52,19 @@ h1, h2, h3, h4, h5, h6 {
    Buttons: .btn + one of .btn-primary | .btn-secondary | .btn-dark | .btn-danger, optional .btn-sm
    --------------------------------------------------------------------------------------------- */
 @layer components {
+  /* A table inside a card that scrolls on its own once it is long (about 12 rows), with the header row
+     pinned, instead of making the whole page endless. Short tables are unaffected. */
+  .table-scroll {
+    max-height: 28rem;
+    overflow: auto;
+  }
+  .table-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--gs-light);
+  }
+
   .field {
     min-height: 2.5rem;
     border-radius: 0.5rem;
@@ -256,7 +269,11 @@ h1, h2, h3, h4, h5, h6 {
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* Press feedback — only on things that look like buttons. */
+  /* Press feedback — only on things that look like buttons. A select trigger is a field, so it opts out. */
+  [data-select-trigger]:active {
+    transform: none !important;
+  }
+
   button:not(:disabled):active,
   [role="button"]:not([aria-disabled="true"]):active,
   .btn:not(:disabled):not([aria-disabled="true"]):active {

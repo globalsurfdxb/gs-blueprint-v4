@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { createTaskInDrawer } from "@/lib/actions/tasks";
+import { MULTI_UPLOAD_BYTES, shrinkImage } from "@/lib/shrink-image";
 import { TaskTypeProvider } from "@/components/task-type-context";
 import { TaskTypeFields } from "@/components/task-type-fields";
 import { AssigneeField } from "@/components/assignee-field";
 import type { TaskCreateOptions } from "@/lib/actions/task-create";
+import { Select } from "@/components/select";
 
 const fieldClass =
   "field";
@@ -35,6 +37,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
 export function CreateTaskPanel({
   projects,
   projectLocked,
+  bugMode = false,
   options,
   loading,
   initialGroupId,
@@ -45,6 +48,8 @@ export function CreateTaskPanel({
   projects: { id: string; name: string; clientName: string }[] | null;
   /** True when opened from inside a project — Project Name and Cluster render as fixed fields. */
   projectLocked: boolean;
+  /** "Report a bug": Bug is preselected and only teams with Bug Tracking enabled are offered. */
+  bugMode?: boolean;
   options: TaskCreateOptions | null;
   loading: boolean;
   initialGroupId: string | null;
@@ -58,7 +63,7 @@ export function CreateTaskPanel({
       <div className="anim-slide-right relative z-10 flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-xl">
         <div className="sticky top-0 flex items-start justify-between gap-3 border-b border-gs-gray/15 bg-white px-5 py-4">
           <div className="flex-1">
-            <h2 className="text-base font-semibold">New Task</h2>
+            <h2 className="text-base font-semibold">{bugMode ? "Report a Bug" : "New Task"}</h2>
             {projectLocked ? (
               // Created from inside a project: Project Name and Cluster are fixed context, not
               // choices — shown read-only so the task can't be filed somewhere else by mistake.
@@ -75,7 +80,7 @@ export function CreateTaskPanel({
                     Project
                   </label>
                   {projects && projects.length > 0 ? (
-                    <select
+                    <Select
                       id="create-project"
                       value={options?.projectId ?? ""}
                       onChange={(e) => onProjectChange(e.target.value)}
@@ -84,7 +89,7 @@ export function CreateTaskPanel({
                       {projects.map((p) => (
                         <option key={p.id} value={p.id}>{p.name} · {p.clientName}</option>
                       ))}
-                    </select>
+                    </Select>
                   ) : (
                     <p className="text-sm">{options ? `${options.projectName} · ${options.clientName}` : "…"}</p>
                   )}
@@ -98,12 +103,22 @@ export function CreateTaskPanel({
 
         {loading || !options ? (
           <div className="p-6 text-sm text-gs-gray">Loading…</div>
-        ) : options.groups.length === 0 ? (
-          <div className="p-6 text-sm text-gs-gray">You don&apos;t have permission to create a task on this project.</div>
+        ) : (bugMode ? options.groups.filter((g) => g.bugTrackingEnabled) : options.groups).length === 0 ? (
+          <div className="p-6 text-sm text-gs-gray">
+            {bugMode
+              ? "Bug Tracking isn't enabled for any team on this project, or you can't report bugs here."
+              : "You don't have permission to create a task on this project."}
+          </div>
         ) : (
           // Keyed on the project so switching projects remounts the form and its default group /
           // task type recompute from the new options — no resetting effect needed.
-          <CreateForm key={options.projectId} options={options} initialGroupId={initialGroupId} onCreated={onCreated} />
+          <CreateForm
+            key={options.projectId}
+            options={bugMode ? { ...options, groups: options.groups.filter((g) => g.bugTrackingEnabled) } : options}
+            initialGroupId={initialGroupId}
+            bugMode={bugMode}
+            onCreated={onCreated}
+          />
         )}
       </div>
     </div>
@@ -113,10 +128,12 @@ export function CreateTaskPanel({
 function CreateForm({
   options,
   initialGroupId,
+  bugMode,
   onCreated,
 }: {
   options: TaskCreateOptions;
   initialGroupId: string | null;
+  bugMode: boolean;
   onCreated: () => void;
 }) {
   const [selectedGroupId, setSelectedGroupId] = useState<string>(() => {
@@ -126,10 +143,23 @@ function CreateForm({
   });
   const selectedGroup = options.groups.find((g) => g.id === selectedGroupId) ?? null;
 
+  // Screenshots are shrunk in the browser first, so three of them fit in one request (hosted
+  // functions reject bodies over ~4.5MB). Count and size are checked here for a clear message; the
+  // server re-checks everything.
+  async function submit(formData: FormData) {
+    const files = formData.getAll("image").filter((f): f is File => f instanceof File && f.size > 0);
+    formData.delete("image");
+    if (files.length > 3) return { ok: false as const, error: "A bug can have at most 3 screenshots." };
+    const tooBig = files.find((f) => f.size > 5 * 1024 * 1024);
+    if (tooBig) return { ok: false as const, error: `“${tooBig.name}” is over 5MB — use a smaller image.` };
+    for (const f of files) formData.append("image", await shrinkImage(f, MULTI_UPLOAD_BYTES));
+    return createTaskInDrawer(options.projectId, formData);
+  }
+
   return (
     <ActionForm
-      action={createTaskInDrawer.bind(null, options.projectId)}
-      successMessage="Task created."
+      action={submit}
+      successMessage={bugMode ? "Bug reported." : "Task created."}
       onSuccess={onCreated}
       className="flex flex-col gap-4 px-5 py-4"
     >
@@ -139,7 +169,7 @@ function CreateForm({
       ) : (
         <div className="flex flex-col gap-1.5">
           <label htmlFor="create-group" className="text-sm font-medium">Task Group</label>
-          <select
+          <Select
             id="create-group"
             name="groupId"
             required
@@ -151,7 +181,7 @@ function CreateForm({
             {options.groups.map((g) => (
               <option key={g.id} value={g.id}>{g.name} · {g.leadName}</option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
 
@@ -159,8 +189,8 @@ function CreateForm({
         <p className="text-sm text-gs-gray">Select a Task Group to continue.</p>
       ) : (
         // Keyed on the group so the Task Type resets to Standard when the group changes.
-        <TaskTypeProvider key={selectedGroup.id}>
-          {selectedGroup.bugTrackingEnabled && <TaskTypeFields />}
+        <TaskTypeProvider key={selectedGroup.id} initialType={bugMode && selectedGroup.bugTrackingEnabled ? "BUG" : "STANDARD"}>
+          {selectedGroup.bugTrackingEnabled && <TaskTypeFields lockToBug={bugMode} />}
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="create-name" className="text-sm font-medium">Task Name</label>
@@ -186,12 +216,12 @@ function CreateForm({
               <label htmlFor="create-sprint" className="text-sm font-medium">
                 Sprint <span className="text-gs-gray">(optional)</span>
               </label>
-              <select id="create-sprint" name="sprintId" defaultValue="" className={fieldClass}>
+              <Select id="create-sprint" name="sprintId" defaultValue="" className={fieldClass}>
                 <option value="">Backlog (no sprint)</option>
                 {selectedGroup.sprints.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}{s.status === "ACTIVE" ? " · Active" : ""}</option>
                 ))}
-              </select>
+              </Select>
               {selectedGroup.sprints.length === 0 && (
                 <p className="text-xs text-gs-gray">
                   No open sprints on this project yet — a Lead creates one from the project page, then tasks can be added to it.
@@ -203,12 +233,12 @@ function CreateForm({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="create-priority" className="text-sm font-medium">Priority</label>
-              <select id="create-priority" name="priority" defaultValue="MEDIUM" className={fieldClass}>
+              <Select id="create-priority" name="priority" defaultValue="MEDIUM" className={fieldClass}>
                 <option value="LOW">Low</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="HIGH">High</option>
                 <option value="URGENT">Urgent</option>
-              </select>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="create-due" className="text-sm font-medium">Due Date</label>
@@ -220,7 +250,7 @@ function CreateForm({
             pendingLabel="Creating…"
             className="btn btn-primary mt-2"
           >
-            Create Task
+            {bugMode ? "Report Bug" : "Create Task"}
           </SubmitButton>
         </TaskTypeProvider>
       )}

@@ -60,6 +60,13 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M4 21a8 8 0 0 1 16 0" />
     </>
   ),
+  "/bugs": (
+    <>
+      <rect x="8" y="6" width="8" height="14" rx="4" />
+      <path d="M8 10H4M8 14H4M16 10h4M16 14h4M9 3l1.5 2M15 3l-1.5 2" />
+    </>
+  ),
+  "/sprints": <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
   "/admin/industries": (
     <>
       <path d="M3 21V9l6 3V9l6 3V4h6v17z" />

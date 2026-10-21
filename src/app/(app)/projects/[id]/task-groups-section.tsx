@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { statusLabel } from "@/lib/bug";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { TaskOpener, useTaskDrawer } from "@/components/task-drawer";
+import { Select } from "@/components/select";
 
 type GroupTask = {
   id: string;
@@ -255,7 +256,7 @@ export function TaskGroupsSection({
         </div>
         {hasAnyTasks && (
           <div className="flex items-center gap-2">
-            <select
+            <Select
               value={ownerFilter}
               onChange={(e) => setOwnerFilter(e.target.value)}
               className="field field-sm text-xs"
@@ -264,8 +265,8 @@ export function TaskGroupsSection({
               {owners.map(([id, name]) => (
                 <option key={id} value={id}>{name}</option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="field field-sm text-xs"
@@ -274,7 +275,7 @@ export function TaskGroupsSection({
               {Object.entries(STATUS_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
-            </select>
+            </Select>
           </div>
         )}
       </div>
@@ -319,7 +320,7 @@ export function TaskGroupsSection({
                   <p className="text-xs text-gs-gray">No tasks match the current filter.</p>
                 )}
                 {shown.length > 0 && (
-                  <div className="overflow-x-auto">
+                  <div className="table-scroll">
                     <TaskTable projectId={projectId} tasks={shown} />
                   </div>
                 )}
@@ -338,7 +339,7 @@ export function TaskGroupsSection({
                 {shown.length === 0 ? (
                   <p className="text-xs text-gs-gray">No tasks match the current filter.</p>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="table-scroll">
                     <TaskTable projectId={projectId} tasks={shown} />
                   </div>
                 )}
@@ -352,14 +353,14 @@ export function TaskGroupsSection({
         <ActionForm action={attachAction} className="mt-3 flex flex-wrap items-end gap-3">
           <div className="flex w-full flex-col gap-1.5 sm:w-auto">
             <label className="text-xs font-medium text-gs-gray">Attach Discipline Lead</label>
-            <select name="leadRoleId" required className="field w-full min-w-0 sm:w-72">
+            <Select name="leadRoleId" required className="field w-full min-w-0 sm:w-72">
               <option value="" disabled>
                 {availableLeadRoles.length === 0 ? "No more Leads available" : "Select a Lead"}
               </option>
               {availableLeadRoles.map((r) => (
                 <option key={r.id} value={r.id}>{r.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <button
             type="submit"

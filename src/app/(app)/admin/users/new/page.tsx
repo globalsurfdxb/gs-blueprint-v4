@@ -6,6 +6,7 @@ import { createUser } from "@/lib/actions/users";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { RoleFields } from "../role-fields";
 import { PageHeader } from "@/components/page-header";
+import { Select } from "@/components/select";
 
 export default async function NewUserPage() {
   const currentUser = await getCurrentUser();
@@ -61,7 +62,7 @@ export default async function NewUserPage() {
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="location" className="text-sm font-medium">Location</label>
-          <select
+          <Select
             id="location"
             name="location"
             defaultValue="DUBAI"
@@ -69,7 +70,7 @@ export default async function NewUserPage() {
           >
             <option value="DUBAI">Dubai</option>
             <option value="INDIA">India</option>
-          </select>
+          </Select>
         </div>
 
         <RoleFields clusters={clusters} />

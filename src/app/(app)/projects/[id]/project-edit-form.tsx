@@ -1,5 +1,6 @@
 import { ActionForm } from "@/components/action-form";
 import { SaveButton } from "@/components/save-button";
+import { Select } from "@/components/select";
 
 type ServiceType = { id: string; name: string };
 type AccountManager = { id: string; name: string };
@@ -18,7 +19,7 @@ type ProjectDefaults = {
   dependencyTrackerId: string | null;
   dependencyTrackerName: string | null;
   // Bumped on every save (Prisma @updatedAt). Used as the form's React key so the whole
-  // form remounts after a successful save and its uncontrolled <select>/<input> defaults
+  // form remounts after a successful save and its uncontrolled <Select>/<input> defaults
   // re-sync to the freshly-saved server values — otherwise a just-changed Status / Account
   // Manager / Dependency Tracker could read stale in the control until a manual refresh.
   updatedAt: Date;
@@ -65,7 +66,7 @@ export function ProjectEditForm({
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="serviceTypeId" className="text-sm font-medium">Service Type</label>
-        <select
+        <Select
           id="serviceTypeId"
           name="serviceTypeId"
           defaultValue={defaults.serviceTypeId}
@@ -74,7 +75,7 @@ export function ProjectEditForm({
           {serviceTypes.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -123,7 +124,7 @@ export function ProjectEditForm({
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="status" className="text-sm font-medium">Status</label>
-        <select
+        <Select
           id="status"
           name="status"
           defaultValue={defaults.status}
@@ -132,7 +133,7 @@ export function ProjectEditForm({
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {canSeeMaxAllocatedHours && (
@@ -176,7 +177,7 @@ export function ProjectEditForm({
         <label className="text-sm font-medium">Account Manager</label>
         {canAssignAccountManager ? (
           <>
-            <select
+            <Select
               id="accountManagerId"
               name="accountManagerId"
               defaultValue={defaults.accountManagerId ?? ""}
@@ -186,7 +187,7 @@ export function ProjectEditForm({
               {accountManagers.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
-            </select>
+            </Select>
             <p className="text-xs text-gs-gray">
               Restricted to Account/Client Services users in the Project Delivery &amp; Client Services cluster.
             </p>
@@ -203,7 +204,7 @@ export function ProjectEditForm({
         <label className="text-sm font-medium">Dependency Tracker</label>
         {canAssignDependencyTracker ? (
           <>
-            <select
+            <Select
               id="dependencyTrackerId"
               name="dependencyTrackerId"
               defaultValue={defaults.dependencyTrackerId ?? ""}
@@ -213,7 +214,7 @@ export function ProjectEditForm({
               {dependencyTrackers.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
-            </select>
+            </Select>
             <p className="text-xs text-gs-gray">
               View-only coordinator — sees only this project&apos;s cross-group-linked tasks (predecessor/successor).
             </p>

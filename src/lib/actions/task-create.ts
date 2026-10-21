@@ -61,7 +61,7 @@ const projectInclude = {
  * the user is actually attached to appear (QA B-01): Admin sees all; a Lead/Account Manager/Cluster
  * Head sees the projects they lead or oversee; a Contributor sees the projects they have work on.
  */
-export async function getCreatableProjects() {
+export async function getCreatableProjects(opts: { bugsOnly?: boolean } = {}) {
   return runAction(async () => {
     const user = await getCurrentUser();
     if (!user) throw new Error("Your session has expired. Please sign in again.");
@@ -89,6 +89,8 @@ export async function getCreatableProjects() {
           canCreateTaskInGroup(user, p) ||
           (workedOn.has(p.id) && p.taskGroups.some((g) => canSelfCreateInGroup(user, g))),
       )
+      // "Report a bug" only lists projects that have a team with Bug Tracking switched on.
+      .filter((p) => !opts.bugsOnly || p.taskGroups.some((g) => g.pod?.bugTrackingEnabled))
       .map((p) => ({ id: p.id, name: p.name, clientName: p.client.name }));
   });
 }

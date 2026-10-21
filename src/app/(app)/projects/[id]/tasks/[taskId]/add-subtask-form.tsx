@@ -1,4 +1,5 @@
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { Select } from "@/components/select";
 
 export function AddSubtaskForm({ action }: { action: (formData: FormData) => void }) {
   return (
@@ -17,12 +18,12 @@ export function AddSubtaskForm({ action }: { action: (formData: FormData) => voi
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-gs-gray">Priority</label>
-        <select name="priority" defaultValue="MEDIUM" className="field">
+        <Select name="priority" defaultValue="MEDIUM" className="field">
           <option value="LOW">Low</option>
           <option value="MEDIUM">Medium</option>
           <option value="HIGH">High</option>
           <option value="URGENT">Urgent</option>
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-gs-gray">Due Date</label>

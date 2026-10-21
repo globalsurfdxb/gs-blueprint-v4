@@ -65,6 +65,7 @@ import { BugImagesSection } from "./bug-images-section";
 import { uploadBugImage, removeBugImage } from "@/lib/actions/bug-images";
 import { formatLocalDate, formatLocalTime } from "@/lib/timezone";
 import { PageHeader } from "@/components/page-header";
+import { Select } from "@/components/select";
 
 const PRIORITY_LABELS: Record<string, string> = {
   LOW: "Low",
@@ -381,7 +382,7 @@ export default async function TaskDetailPage({
         >
           <div className="flex flex-col gap-1">
             <label htmlFor="sprintId" className="text-xs font-medium text-gs-gray">Sprint</label>
-            <select
+            <Select
               id="sprintId"
               name="sprintId"
               defaultValue={task.sprintId ?? ""}
@@ -393,7 +394,7 @@ export default async function TaskDetailPage({
                   {s.name}{s.status === "ACTIVE" ? " · Active" : s.status === "COMPLETED" ? " · Completed" : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <SubmitButton
             pendingLabel="Saving…"

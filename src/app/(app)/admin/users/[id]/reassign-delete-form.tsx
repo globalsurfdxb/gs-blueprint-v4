@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Select } from "@/components/select";
 
 type Candidate = { id: string; label: string };
 
@@ -32,7 +33,7 @@ export function ReassignDeleteForm({
       </p>
       <label className="flex flex-col gap-1 text-sm font-medium">
         Hand work over to
-        <select
+        <Select
           name="targetUserId"
           required
           value={targetId}
@@ -50,7 +51,7 @@ export function ReassignDeleteForm({
               {c.label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       {!confirming ? (

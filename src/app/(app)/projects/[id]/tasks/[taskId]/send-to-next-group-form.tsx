@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { Select } from "@/components/select";
 
 function ShareIcon({ className }: { className?: string }) {
   return (
@@ -53,7 +54,7 @@ export function SendToNextGroupForm({
       <ActionForm action={action} successMessage="Handed off to the next group." className="mt-3 flex flex-col gap-3 rounded-lg border border-gs-gray/15 bg-white p-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gs-gray">Destination Task Group</label>
-          <select
+          <Select
             name="destinationGroupId"
             required
             value={destinationGroupId}
@@ -64,7 +65,7 @@ export function SendToNextGroupForm({
             {destinationGroups.map((g) => (
               <option key={g.id} value={g.id}>{g.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gs-gray">Brief for the receiving Lead (editable)</label>

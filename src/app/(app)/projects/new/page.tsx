@@ -11,6 +11,7 @@ import { createProject } from "@/lib/actions/projects";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { OneDriveLinksField } from "./onedrive-links-field";
 import { PageHeader } from "@/components/page-header";
+import { Select } from "@/components/select";
 
 export default async function NewProjectPage() {
   const user = await getCurrentUser();
@@ -77,7 +78,7 @@ export default async function NewProjectPage() {
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="clientId" className="text-sm font-medium">Client</label>
-          <select
+          <Select
             id="clientId"
             name="clientId"
             required
@@ -87,12 +88,12 @@ export default async function NewProjectPage() {
             {clients.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="serviceTypeId" className="text-sm font-medium">Service Type</label>
-          <select
+          <Select
             id="serviceTypeId"
             name="serviceTypeId"
             required
@@ -102,12 +103,12 @@ export default async function NewProjectPage() {
             {serviceTypes.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="clusterId" className="text-sm font-medium">Cluster</label>
-          <select
+          <Select
             id="clusterId"
             name="clusterId"
             required
@@ -118,12 +119,12 @@ export default async function NewProjectPage() {
             {clusters.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="status" className="text-sm font-medium">Status</label>
-          <select
+          <Select
             id="status"
             name="status"
             defaultValue="PLANNING"
@@ -134,7 +135,7 @@ export default async function NewProjectPage() {
             <option value="PAUSED">Paused</option>
             <option value="COMPLETED">Completed</option>
             <option value="CANCELLED">Cancelled</option>
-          </select>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -214,7 +215,7 @@ export default async function NewProjectPage() {
             <label htmlFor="accountManagerId" className="text-sm font-medium">
               Account Manager <span className="text-gs-gray">(optional)</span>
             </label>
-            <select
+            <Select
               id="accountManagerId"
               name="accountManagerId"
               defaultValue=""
@@ -224,7 +225,7 @@ export default async function NewProjectPage() {
               {accountManagers.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
-            </select>
+            </Select>
             <p className="text-xs text-gs-gray">
               Restricted to Account/Client Services users in the Project Delivery &amp; Client Services cluster.
             </p>
@@ -236,7 +237,7 @@ export default async function NewProjectPage() {
             <label htmlFor="dependencyTrackerId" className="text-sm font-medium">
               Dependency Tracker <span className="text-gs-gray">(optional)</span>
             </label>
-            <select
+            <Select
               id="dependencyTrackerId"
               name="dependencyTrackerId"
               defaultValue=""
@@ -246,7 +247,7 @@ export default async function NewProjectPage() {
               {dependencyTrackers.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
-            </select>
+            </Select>
             <p className="text-xs text-gs-gray">
               View-only coordinator — sees only this project&apos;s cross-group-linked tasks (predecessor/successor).
               Can be changed later from the project page.

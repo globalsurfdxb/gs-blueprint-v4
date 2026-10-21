@@ -4,11 +4,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { isLead, SOCIAL_MEDIA_POD_NAME, CONTENT_POD_NAME, DESIGN_POD_NAME } from "@/lib/permissions";
 import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
-import { daysOverdue } from "@/lib/timezone";
+import { addDays, daysOverdue, getLocalDateString } from "@/lib/timezone";
 import { PageHeader } from "@/components/page-header";
 import { AutoFilterForm } from "@/components/auto-filter-form";
 import { TaskStatusChip } from "@/components/task-chips";
 import { statusLabel } from "@/lib/bug";
+import { Select } from "@/components/select";
 
 // The lens the page is shown through. "action" is the original queue (submitted for review, or
 // unassigned); the rest are the filtered lists the Lead dashboard's cards open (QA F-02), plus a
@@ -30,13 +31,24 @@ const taskInclude = { project: { include: { client: true } }, assignedTo: true, 
 export default async function MyReviewsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    q?: string;
+    project?: string;
+    assignee?: string;
+    status?: string;
+    priority?: string;
+    type?: string;
+    due?: string;
+    revisions?: string;
+  }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (!isLead(user)) redirect("/");
 
-  const { view: viewParam = "" } = await searchParams;
+  const sp = await searchParams;
+  const viewParam = sp.view ?? "";
   const view: ViewKey = viewParam in VIEWS ? (viewParam as ViewKey) : "action";
 
   const now = new Date();
@@ -83,6 +95,70 @@ export default async function MyReviewsPage({
   if (user.restrictToOwnTasks) {
     tasks = tasks.filter((t) => t.assignedToId === user.id || t.createdById === user.id);
   }
+
+  // ---- Filter bar: search, project, assignee, status, priority, type, due, revisions. Layered on
+  // top of the "Show" view above; options come from what the view returned, so every choice has
+  // at least one row behind it. ----
+  const viewTasks = tasks;
+  const projectOptions = Array.from(new Map(viewTasks.map((t) => [t.projectId, t.project.name])).entries()).sort((a, b) =>
+    a[1].localeCompare(b[1]),
+  );
+  const assigneeOptions = Array.from(
+    new Map(viewTasks.filter((t) => t.assignedTo).map((t) => [t.assignedToId as string, t.assignedTo!.name])).entries(),
+  ).sort((a, b) => a[1].localeCompare(b[1]));
+  const hasUnassigned = viewTasks.some((t) => t.assignedToId === null);
+  const hasBugs = viewTasks.some((t) => t.taskType === "BUG");
+  const STATUS_FILTERS = ["NEW", "IN_PROGRESS", "REVIEW", "ON_HOLD", "COMPLETED"] as const;
+  const PRIORITY_FILTERS = ["URGENT", "HIGH", "MEDIUM", "LOW"] as const;
+
+  const fQ = (sp.q ?? "").trim();
+  const fProject = projectOptions.some(([id]) => id === sp.project) ? (sp.project as string) : "";
+  const fAssignee =
+    sp.assignee === "none" && hasUnassigned
+      ? "none"
+      : assigneeOptions.some(([id]) => id === sp.assignee)
+        ? (sp.assignee as string)
+        : "";
+  const fStatus = (STATUS_FILTERS as readonly string[]).includes(sp.status ?? "") ? (sp.status as string) : "";
+  const fPriority = (PRIORITY_FILTERS as readonly string[]).includes(sp.priority ?? "") ? (sp.priority as string) : "";
+  const fType = hasBugs && (sp.type === "BUG" || sp.type === "STANDARD") ? sp.type : "";
+  const fDue = ["overdue", "today", "week"].includes(sp.due ?? "") ? (sp.due as string) : "";
+  const fRevisions = ["1", "2"].includes(sp.revisions ?? "") ? Number(sp.revisions) : 0;
+  const anyFilter = !!(fQ || fProject || fAssignee || fStatus || fPriority || fType || fDue || fRevisions || view !== "action");
+  const needle = fQ.toLowerCase();
+
+  const todayStr = getLocalDateString(user.location, now);
+  const weekEndStr = addDays(todayStr, 6);
+
+  tasks = viewTasks.filter((t) => {
+    if (fProject && t.projectId !== fProject) return false;
+    if (fAssignee === "none" ? t.assignedToId !== null : fAssignee && t.assignedToId !== fAssignee) return false;
+    if (fStatus && t.status !== fStatus) return false;
+    if (fPriority && t.priority !== fPriority) return false;
+    if (fType && t.taskType !== fType) return false;
+    if (fRevisions && t.revisionCount < fRevisions) return false;
+    if (fDue) {
+      if (t.status === "COMPLETED") return false;
+      const d = t.dueDate.toISOString().slice(0, 10);
+      if (fDue === "overdue") {
+        const late = daysOverdue(t.dueDate, t.assignedTo?.location ?? FALLBACK_LOCATION, now);
+        if (t.status === "ON_HOLD" || late === null || late <= 0) return false;
+      } else if (fDue === "today") {
+        if (d !== todayStr) return false;
+      } else if (d < todayStr || d > weekEndStr) {
+        return false;
+      }
+    }
+    if (
+      needle &&
+      !t.name.toLowerCase().includes(needle) &&
+      !t.project.name.toLowerCase().includes(needle) &&
+      !(t.assignedTo?.name ?? "").toLowerCase().includes(needle)
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   const groups = new Map<string, { project: (typeof tasks)[number]["project"]; tasks: typeof tasks }>();
   for (const t of tasks) {
@@ -151,6 +227,16 @@ export default async function MyReviewsPage({
     calendarPending = [...contentPending, ...designPending];
   }
 
+  calendarPending = calendarPending.filter(
+    (t) =>
+      (!fProject || t.projectId === fProject) &&
+      (!fAssignee || (fAssignee === "none" ? t.assignedToId === null : t.assignedToId === fAssignee)) &&
+      (!needle ||
+        t.name.toLowerCase().includes(needle) ||
+        t.project.name.toLowerCase().includes(needle) ||
+        (t.assignedTo?.name ?? "").toLowerCase().includes(needle)),
+  );
+
   const calendarGroups = new Map<string, { project: (typeof tasks)[number]["project"]; tasks: typeof calendarPending }>();
   for (const t of calendarPending) {
     const existing = calendarGroups.get(t.projectId);
@@ -168,21 +254,131 @@ export default async function MyReviewsPage({
         description={<>
 Work submitted for your review, or still unassigned, across every project you lead a Task Group on.
 </>}
-        actions={
-          <AutoFilterForm className="flex items-center gap-2">
-            <label htmlFor="view" className="text-xs font-medium text-gs-gray">Show</label>
-            <select id="view" name="view" defaultValue={view} className="field field-sm">
-              {Object.entries(VIEWS).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-          </AutoFilterForm>
-        }
       />
+
+      {/* Filter bar — applies as you change it (search waits for a short pause). */}
+      <AutoFilterForm className="mt-5 flex flex-wrap items-end gap-3 rounded-xl border border-gs-gray/10 bg-white p-3 shadow-sm">
+        <div className="flex w-full flex-col gap-1 sm:w-64">
+          <label htmlFor="q" className="text-xs font-medium text-gs-gray">Search</label>
+          <input
+            id="q"
+            name="q"
+            type="search"
+            defaultValue={fQ}
+            placeholder="Task, project or person…"
+            autoComplete="off"
+            className="field field-sm w-full"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="view" className="text-xs font-medium text-gs-gray">Show</label>
+          <Select id="view" name="view" defaultValue={view} className="field field-sm min-w-44">
+            {Object.entries(VIEWS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </Select>
+        </div>
+
+        {projectOptions.length > 1 && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="project" className="text-xs font-medium text-gs-gray">Project</label>
+            <Select id="project" name="project" defaultValue={fProject} className="field field-sm min-w-44">
+              <option value="">All projects</option>
+              {projectOptions.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+
+        {(assigneeOptions.length > 0 || hasUnassigned) && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="assignee" className="text-xs font-medium text-gs-gray">Assignee</label>
+            <Select id="assignee" name="assignee" defaultValue={fAssignee} className="field field-sm min-w-40">
+              <option value="">Everyone</option>
+              {hasUnassigned && <option value="none">Unassigned</option>}
+              {assigneeOptions.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="status" className="text-xs font-medium text-gs-gray">Status</label>
+          <Select id="status" name="status" defaultValue={fStatus} className="field field-sm min-w-36">
+            <option value="">All statuses</option>
+            <option value="NEW">New</option>
+            <option value="IN_PROGRESS">In Progress</option>
+            <option value="REVIEW">Review</option>
+            <option value="ON_HOLD">On Hold</option>
+            <option value="COMPLETED">Completed</option>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="due" className="text-xs font-medium text-gs-gray">Due</label>
+          <Select id="due" name="due" defaultValue={fDue} className="field field-sm min-w-36">
+            <option value="">Any time</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Today</option>
+            <option value="week">Next 7 days</option>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="priority" className="text-xs font-medium text-gs-gray">Priority</label>
+          <Select id="priority" name="priority" defaultValue={fPriority} className="field field-sm min-w-36">
+            <option value="">Any priority</option>
+            <option value="URGENT">Urgent</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="revisions" className="text-xs font-medium text-gs-gray">Revisions</label>
+          <Select id="revisions" name="revisions" defaultValue={fRevisions ? String(fRevisions) : ""} className="field field-sm min-w-36">
+            <option value="">Any</option>
+            <option value="1">1 or more</option>
+            <option value="2">2 or more (flagged)</option>
+          </Select>
+        </div>
+
+        {hasBugs && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="type" className="text-xs font-medium text-gs-gray">Type</label>
+            <Select id="type" name="type" defaultValue={fType} className="field field-sm min-w-32">
+              <option value="">Tasks &amp; bugs</option>
+              <option value="STANDARD">Tasks</option>
+              <option value="BUG">Bugs</option>
+            </Select>
+          </div>
+        )}
+
+        <div className="flex min-h-9 items-center gap-3 pb-0.5 text-sm text-gs-gray sm:ml-auto">
+          <span>
+            {tasks.length} of {viewTasks.length} {viewTasks.length === 1 ? "task" : "tasks"}
+          </span>
+          {anyFilter && (
+            <Link href="/my-reviews" className="font-medium text-gs-red hover:underline">
+              Clear filters
+            </Link>
+          )}
+        </div>
+      </AutoFilterForm>
 
       {groups.size === 0 && calendarGroups.size === 0 && (
         <p className="mt-6 text-sm text-gs-gray">
-          {view === "action" ? "Nothing waiting on your review." : `No tasks to show for “${VIEWS[view]}”.`}
+          {anyFilter && view === "action" && viewTasks.length > 0
+            ? "No tasks match these filters."
+            : view === "action"
+              ? "Nothing waiting on your review."
+              : viewTasks.length > 0
+                ? "No tasks match these filters."
+                : `No tasks to show for “${VIEWS[view]}”.`}
         </p>
       )}
 

@@ -14,6 +14,7 @@ import { getCreatableProjects, getTaskCreateOptions, type TaskCreateOptions } fr
 import { CreateTaskPanel } from "@/components/create-task-panel";
 import { formatLocalDate, formatLocalTime } from "@/lib/timezone";
 import { isFailure, noticeOf, readableError } from "@/lib/action-result";
+import { Select } from "@/components/select";
 
 // Quick-edit task drawer. A right-side slide-over rendered over the current view — opening it
 // does NOT navigate, so the underlying view's scroll position and filters are preserved. Inline
@@ -28,7 +29,7 @@ type DrawerApi = {
   openTask: (taskId: string) => void;
   /** Open the create drawer. Pass a project (and optionally a group) to pre-select it; with no
    * project the picker defaults to the user's first creatable project. */
-  openCreate: (projectId?: string, groupId?: string) => void;
+  openCreate: (projectId?: string, groupId?: string, opts?: { bug?: boolean }) => void;
 };
 const TaskDrawerContext = createContext<DrawerApi | null>(null);
 /** Returns the drawer API, or null when no drawer provider is mounted — callers fall back to
@@ -72,6 +73,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
   const [createInitialGroupId, setCreateInitialGroupId] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
   const [createProjectLocked, setCreateProjectLocked] = useState(false);
+  const [createBugMode, setCreateBugMode] = useState(false);
   const { addToast } = useToast();
   const router = useRouter();
 
@@ -122,10 +124,11 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
   // shows Project Name and Cluster as fixed, read-only fields. Opened from a cross-project surface
   // (My Tasks): a picker limited to the user's own projects.
   const openCreate = useCallback(
-    (projectId?: string, groupId?: string) => {
+    (projectId?: string, groupId?: string, opts?: { bug?: boolean }) => {
       setTaskId(null);
       setData(null);
       setCreating(true);
+      setCreateBugMode(!!opts?.bug);
       setCreateProjectLocked(!!projectId);
       setCreateInitialGroupId(groupId ?? null);
       setCreateOptions(null);
@@ -135,7 +138,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
         try {
           let pid = projectId;
           if (!pid) {
-            const projs = await getCreatableProjects();
+            const projs = await getCreatableProjects({ bugsOnly: !!opts?.bug });
             if (isFailure(projs)) {
               addToast(projs.error, "error");
               setCreating(false);
@@ -226,6 +229,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
         <CreateTaskPanel
           projects={createProjects}
           projectLocked={createProjectLocked}
+          bugMode={createBugMode}
           options={createOptions}
           loading={createLoading}
           initialGroupId={createInitialGroupId}
@@ -269,7 +273,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
 
                   <Field label="Status">
                     {data.statusOptions.length > 1 ? (
-                      <select
+                      <Select
                         className={selectClass}
                         disabled={pending}
                         value={data.status}
@@ -286,7 +290,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                             {o.hint ? ` — ${o.hint}` : ""}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     ) : (
                       // Nothing this user may change it to — show the status instead of a dropdown
                       // full of moves that would only be refused (QA B-02, E-01).
@@ -296,7 +300,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
 
                   {data.canReassign && (
                     <Field label={data.reassignBugMode ? "Assignee (hand bug to)" : "Assignee"}>
-                      <select
+                      <Select
                         className={selectClass}
                         disabled={pending}
                         value={data.assignedToId ?? ""}
@@ -313,7 +317,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                             {a.id === data.assignedToId ? " (current)" : ""}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </Field>
                   )}
                   {!data.canReassign && (
@@ -324,7 +328,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
 
                   <Field label="Priority">
                     {data.canEditAttributes ? (
-                      <select
+                      <Select
                         className={selectClass}
                         disabled={pending}
                         value={data.priority}
@@ -333,7 +337,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                         {PRIORITIES.map((p) => (
                           <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
                         ))}
-                      </select>
+                      </Select>
                     ) : (
                       <p className="text-sm">{PRIORITY_LABELS[data.priority] ?? data.priority}</p>
                     )}
@@ -342,7 +346,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                   {data.taskType === "BUG" && (
                     <Field label="Severity">
                       {data.canEditAttributes ? (
-                        <select
+                        <Select
                           className={selectClass}
                           disabled={pending}
                           value={data.severity ?? ""}
@@ -352,7 +356,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                           {SEVERITIES.map((s) => (
                             <option key={s} value={s}>{SEVERITY_LABELS[s]}</option>
                           ))}
-                        </select>
+                        </Select>
                       ) : (
                         <p className="text-sm">{data.severity ? SEVERITY_LABELS[data.severity] : "—"}</p>
                       )}
@@ -361,7 +365,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
 
                   {data.canManageSprint && (
                     <Field label="Sprint">
-                      <select
+                      <Select
                         className={selectClass}
                         disabled={pending}
                         value={data.sprintId ?? ""}
@@ -371,7 +375,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                         {data.sprints.map((s) => (
                           <option key={s.id} value={s.id}>{s.name}{s.status === "ACTIVE" ? " · Active" : s.status === "COMPLETED" ? " · Completed" : ""}</option>
                         ))}
-                      </select>
+                      </Select>
                       {data.sprints.length === 0 && (
                         <span className="text-xs text-gs-gray">
                           No open sprints yet — a Lead creates one from the project page.

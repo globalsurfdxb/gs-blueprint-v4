@@ -1,3 +1,4 @@
+import { Select } from "@/components/select";
 export function MonthYearPicker({
   month,
   year,
@@ -14,7 +15,7 @@ export function MonthYearPicker({
       {view && <input type="hidden" name="view" value={view} />}
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-gs-gray">Month</label>
-        <select
+        <Select
           name="month"
           defaultValue={month}
           className="field"
@@ -22,7 +23,7 @@ export function MonthYearPicker({
           {monthNames.map((name, i) => (
             <option key={name} value={i + 1}>{name}</option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-gs-gray">Year</label>

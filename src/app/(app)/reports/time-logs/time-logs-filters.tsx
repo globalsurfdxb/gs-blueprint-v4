@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { TimeLogParams, TimeLogPeriod } from "@/lib/reports";
 import { AutoFilterForm } from "@/components/auto-filter-form";
+import { Select } from "@/components/select";
 
 const PERIODS: { value: TimeLogPeriod; label: string }[] = [
   { value: "day", label: "Today" },
@@ -32,25 +33,25 @@ export function TimeLogsFilters({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-gs-gray">Project</span>
-          <select name="projectId" defaultValue={params.projectId} className={fieldClass}>
+          <Select name="projectId" defaultValue={params.projectId} className={fieldClass}>
             <option value="">All projects</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-gs-gray">Assignee</span>
-          <select name="assigneeId" defaultValue={params.assigneeId} className={fieldClass}>
+          <Select name="assigneeId" defaultValue={params.assigneeId} className={fieldClass}>
             <option value="">Everyone</option>
             {assignees.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-gs-gray">Period</span>
-          <select
+          <Select
             name="period"
             value={period}
             onChange={(e) => setPeriod(e.target.value as TimeLogPeriod)}
@@ -59,7 +60,7 @@ export function TimeLogsFilters({
             {PERIODS.map((p) => (
               <option key={p.value} value={p.value}>{p.label}</option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
