@@ -4,9 +4,10 @@ import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { createTaskInDrawer } from "@/lib/actions/tasks";
 import { MULTI_UPLOAD_BYTES, shrinkImage } from "@/lib/shrink-image";
-import { TaskTypeProvider } from "@/components/task-type-context";
+import { TaskTypeProvider, useTaskType } from "@/components/task-type-context";
 import { TaskTypeFields } from "@/components/task-type-fields";
 import { AssigneeField } from "@/components/assignee-field";
+import { BugReportFields } from "@/components/bug-report-fields";
 import type { TaskCreateOptions } from "@/lib/actions/task-create";
 import { Select } from "@/components/select";
 
@@ -41,6 +42,7 @@ export function CreateTaskPanel({
   options,
   loading,
   initialGroupId,
+  initialBugSprintId,
   onProjectChange,
   onClose,
   onCreated,
@@ -53,6 +55,8 @@ export function CreateTaskPanel({
   options: TaskCreateOptions | null;
   loading: boolean;
   initialGroupId: string | null;
+  /** Preselects a bug sprint (opened from a bug sprint's "Report bug here"). */
+  initialBugSprintId?: string | null;
   onProjectChange: (projectId: string) => void;
   onClose: () => void;
   onCreated: () => void;
@@ -116,6 +120,7 @@ export function CreateTaskPanel({
             key={options.projectId}
             options={bugMode ? { ...options, groups: options.groups.filter((g) => g.bugTrackingEnabled) } : options}
             initialGroupId={initialGroupId}
+            initialBugSprintId={initialBugSprintId ?? null}
             bugMode={bugMode}
             onCreated={onCreated}
           />
@@ -125,14 +130,49 @@ export function CreateTaskPanel({
   );
 }
 
+function BugSprintField({
+  bugSprints,
+  initialId,
+  lockToBug,
+}: {
+  bugSprints: TaskCreateOptions["bugSprints"];
+  initialId: string | null;
+  lockToBug: boolean;
+}) {
+  const { taskType } = useTaskType();
+  if ((!lockToBug && taskType !== "BUG") || bugSprints.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="create-bug-sprint" className="text-sm font-medium">
+        Bug sprint <span className="text-gs-gray">(optional)</span>
+      </label>
+      <Select
+        id="create-bug-sprint"
+        name="bugSprintId"
+        defaultValue={bugSprints.some((b) => b.id === initialId) ? initialId ?? "" : ""}
+        className={fieldClass}
+      >
+        <option value="">Not in a bug sprint</option>
+        {bugSprints.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name} · due {new Date(b.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+          </option>
+        ))}
+      </Select>
+    </div>
+  );
+}
+
 function CreateForm({
   options,
   initialGroupId,
+  initialBugSprintId,
   bugMode,
   onCreated,
 }: {
   options: TaskCreateOptions;
   initialGroupId: string | null;
+  initialBugSprintId: string | null;
   bugMode: boolean;
   onCreated: () => void;
 }) {
@@ -187,6 +227,20 @@ function CreateForm({
 
       {!selectedGroup ? (
         <p className="text-sm text-gs-gray">Select a Task Group to continue.</p>
+      ) : bugMode && selectedGroup.bugTrackingEnabled ? (
+        // "Report a bug": the short form — see BugReportFields.
+        <>
+          <BugReportFields
+            key={selectedGroup.id}
+            leadId={selectedGroup.leadId}
+            leadName={selectedGroup.leadName}
+            bugSprints={options.bugSprints}
+            initialBugSprintId={initialBugSprintId}
+          />
+          <SubmitButton pendingLabel="Reporting…" className="btn btn-primary mt-2">
+            Report Bug
+          </SubmitButton>
+        </>
       ) : (
         // Keyed on the group so the Task Type resets to Standard when the group changes.
         <TaskTypeProvider key={selectedGroup.id} initialType={bugMode && selectedGroup.bugTrackingEnabled ? "BUG" : "STANDARD"}>
@@ -211,7 +265,12 @@ function CreateForm({
             bugTrackingEnabled={selectedGroup.bugTrackingEnabled}
           />
 
-          {selectedGroup.canManageSprint && (
+          {/* Bug sprint (category + due date) — only for a bug, and only once the project has one. */}
+          {selectedGroup.bugTrackingEnabled && (
+            <BugSprintField bugSprints={options.bugSprints} initialId={initialBugSprintId} lockToBug={bugMode} />
+          )}
+
+          {!bugMode && selectedGroup.canManageSprint && (
             <div className="flex flex-col gap-1.5">
               <label htmlFor="create-sprint" className="text-sm font-medium">
                 Sprint <span className="text-gs-gray">(optional)</span>

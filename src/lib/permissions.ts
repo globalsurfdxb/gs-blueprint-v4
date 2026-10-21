@@ -840,6 +840,31 @@ export function canAssignTaskToSprint(
 }
 
 /**
+ * Bug sprints (a named batch of a project's bugs with a due date — Frontend, Backend, Regression
+ * Retesting…): creating, editing and deleting them is for whoever runs the bug-tracking team on the
+ * project — Admin, the project's Cluster Head, or the Lead of a Bug-Tracking group on it.
+ * `bugGroups` is the project's groups whose discipline has Bug Tracking enabled.
+ */
+export function canManageBugSprints(
+  user: CurrentUser,
+  project: ProjectWithGroups,
+  bugGroups: { leadUserId: string }[],
+) {
+  return isAdmin(user) || clusterHeadReachesProject(user, project) || bugGroups.some((g) => g.leadUserId === user.id);
+}
+
+/** Filing ONE bug under a bug sprint: a bug-sprint manager, or the bug's own assignee / reporter —
+ * the same rule as a task's Sprint field. */
+export function canAssignBugToBugSprint(
+  user: CurrentUser,
+  project: ProjectWithGroups,
+  bugGroups: { leadUserId: string }[],
+  bug: { assignedToId: string | null; createdById: string },
+) {
+  return canManageBugSprints(user, project, bugGroups) || bug.assignedToId === user.id || bug.createdById === user.id;
+}
+
+/**
  * Who may edit a task's Content Body (PRD 8.12): only its current assignee — the exact
  * "the content's author edits it" rule already used for OneDrive links (8.6), where a task
  * field's author is whoever the task is assigned to. Deliberately narrow: not the Lead, not

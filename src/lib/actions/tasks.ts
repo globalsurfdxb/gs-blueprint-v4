@@ -35,8 +35,10 @@ const createTaskSchema = z.object({
   name: z.string().min(1, "Task name is required."),
   description: z.string().optional(),
   assignedToId: z.string().min(1, "Assignee is required."),
-  priority: z.enum(PRIORITY_VALUES),
-  dueDate: z.string().min(1, "Due date is required."),
+  // Required for a standard task; a bug may omit both (priority follows severity, due date follows
+  // its bug sprint) — checked below once the task type is known.
+  priority: z.enum(PRIORITY_VALUES).optional(),
+  dueDate: z.string().optional(),
   // QA / Bug Tracking (PRD 8.2.4). Bug-only fields are validated below against taskType.
   taskType: z.enum(["STANDARD", "BUG"]).optional(),
   severity: z.enum(SEVERITY_VALUES).optional(),
@@ -44,6 +46,8 @@ const createTaskSchema = z.object({
   environment: z.enum(ENVIRONMENT_VALUES).optional(),
   // Agile Sprint Workflow (PRD 8.14) — optional; blank = Backlog.
   sprintId: z.string().optional(),
+  // Bug sprint (category + due date) a bug is filed under — bugs only, optional.
+  bugSprintId: z.string().optional(),
 });
 
 // Single source of truth for task-creation rules (permissions, bug routing, sprint gating,
@@ -58,13 +62,14 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
     name: formData.get("name"),
     description: formData.get("description") || undefined,
     assignedToId: formData.get("assignedToId"),
-    priority: formData.get("priority"),
-    dueDate: formData.get("dueDate"),
+    priority: formData.get("priority") || undefined,
+    dueDate: formData.get("dueDate") || undefined,
     taskType: formData.get("taskType") || undefined,
     severity: formData.get("severity") || undefined,
     stepsToReproduce: formData.get("stepsToReproduce") || undefined,
     environment: formData.get("environment") || undefined,
     sprintId: formData.get("sprintId") || undefined,
+    bugSprintId: formData.get("bugSprintId") || undefined,
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
@@ -112,6 +117,8 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
   }
 
   const isBug = parsed.data.taskType === "BUG";
+  if (!isBug && !parsed.data.priority) throw new Error("Priority is required.");
+  if (!isBug && !parsed.data.dueDate) throw new Error("Due date is required.");
 
   // A Contributor self-creating in their own group is normally auto-assigned to themselves —
   // the submitted assignee is ignored, so they can never assign to a different Contributor
@@ -140,6 +147,29 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
     throw new Error("A Bug needs a Severity and an Environment.");
   }
 
+  // Bug sprint: only a bug can be filed under one, and it must belong to this project.
+  const bugSprintId = isBug ? parsed.data.bugSprintId || null : null;
+  let bugSprintDue: Date | null = null;
+  if (bugSprintId) {
+    const bugSprint = await prisma.bugSprint.findUnique({ where: { id: bugSprintId }, select: { projectId: true, dueDate: true } });
+    if (!bugSprint || bugSprint.projectId !== projectId) {
+      throw new Error("That bug sprint doesn't belong to this project.");
+    }
+    bugSprintDue = bugSprint.dueDate;
+  }
+
+  // A bug reported without a priority / due date (the short "Report a bug" form): priority follows its
+  // severity, and it is due with its bug sprint — or a week out when it isn't in one.
+  const SEVERITY_PRIORITY = { CRITICAL: "URGENT", HIGH: "HIGH", MEDIUM: "MEDIUM", LOW: "LOW" } as const;
+  const priority = parsed.data.priority ?? (parsed.data.severity ? SEVERITY_PRIORITY[parsed.data.severity] : "MEDIUM");
+  let dueDate: Date;
+  if (parsed.data.dueDate) dueDate = new Date(parsed.data.dueDate);
+  else if (bugSprintDue) dueDate = bugSprintDue;
+  else {
+    const t = new Date();
+    dueDate = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate() + 7));
+  }
+
   const task = await prisma.task.create({
     data: {
       projectId,
@@ -147,8 +177,8 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
       name: parsed.data.name,
       description: parsed.data.description,
       assignedToId,
-      priority: parsed.data.priority,
-      dueDate: new Date(parsed.data.dueDate),
+      priority,
+      dueDate,
       createdById: user.id,
       // Bug-only fields are stored only for a Bug; a Standard task never carries them.
       taskType: isBug ? "BUG" : "STANDARD",
@@ -156,6 +186,7 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
       stepsToReproduce: isBug ? parsed.data.stepsToReproduce ?? null : null,
       environment: isBug ? parsed.data.environment : null,
       sprintId,
+      bugSprintId,
     },
   });
 

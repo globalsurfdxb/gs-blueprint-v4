@@ -42,6 +42,8 @@ export type TaskCreateOptions = {
   clientName: string;
   clusterName: string;
   groups: CreateGroupOption[];
+  // The project's bug sprints (Frontend, Backend…) a reported bug can be filed under, soonest due first.
+  bugSprints: { id: string; name: string; dueDate: string }[];
 };
 
 // The include shape the creation permission helpers expect.
@@ -173,11 +175,22 @@ async function loadTaskCreateOptions(projectId: string): Promise<TaskCreateOptio
     });
   }
 
+  const bugSprints = project.taskGroups.some((g) => g.pod?.bugTrackingEnabled)
+    ? (
+        await prisma.bugSprint.findMany({
+          where: { projectId },
+          orderBy: [{ dueDate: "asc" }, { name: "asc" }],
+          select: { id: true, name: true, dueDate: true },
+        })
+      ).map((b) => ({ id: b.id, name: b.name, dueDate: b.dueDate.toISOString() }))
+    : [];
+
   return {
     projectId: project.id,
     projectName: project.name,
     clientName: project.client.name,
     clusterName: project.cluster.name,
     groups,
+    bugSprints,
   };
 }

@@ -17,6 +17,9 @@ import {
   canAssignAccountManager,
   canAssignDependencyTracker,
   canManageSprints,
+  canManageBugSprints,
+  canAssignAnyoneInGroup,
+  canAssignBugToBugSprint,
   canSetTeamCapacity,
   canManageMilestones,
   getEligibleAccountManagers,
@@ -49,12 +52,18 @@ import {
 import { formatDuration, secondsSince } from "@/lib/format";
 import { daysOverdue } from "@/lib/timezone";
 import { addTasksToSprint, createSprint, updateSprint, setSprintStatus } from "@/lib/actions/sprints";
+import { addBugsToBugSprint, createBugSprint, deleteBugSprint, updateBugSprint } from "@/lib/actions/bug-sprints";
+import { bugCountsOf, bugSprintTiming } from "@/lib/bug-sprints";
+import { assignBugsInBulk } from "@/lib/actions/bug-assign";
+import { getGroupAssigneePool } from "@/lib/task-assignment";
+import { statusLabel } from "@/lib/bug";
 import { setTeamCapacity } from "@/lib/actions/team-capacity";
 import { createMilestone, updateMilestone, toggleMilestone, reorderMilestone, deleteMilestone } from "@/lib/actions/milestones";
 import { MilestonesSection } from "./milestones-section";
 import { ProjectEditForm } from "./project-edit-form";
 import { TaskGroupsSection } from "./task-groups-section";
 import { SprintsSection } from "./sprints-section";
+import { BugsSection, type BugSprintRow } from "./bugs-section";
 import { TaskViews, type ViewTask } from "@/components/task-views";
 import { countSprintTasks, sprintCountsFor } from "@/lib/sprint-dashboard";
 import { TaskDrawerProvider } from "@/components/task-drawer";
@@ -175,14 +184,14 @@ export default async function ProjectDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ sprint?: string; tab?: string }>;
+  searchParams: Promise<{ sprint?: string; tab?: string; bugSprint?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const now = new Date();
   const { id } = await params;
-  const { sprint: sprintParam, tab: tabParam } = await searchParams;
+  const { sprint: sprintParam, tab: tabParam, bugSprint: bugSprintParam } = await searchParams;
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
@@ -286,7 +295,6 @@ export default async function ProjectDetailPage({
       ({ ACTIVE: 0, PLANNED: 1, COMPLETED: 2 })[a.status] - ({ ACTIVE: 0, PLANNED: 1, COMPLETED: 2 })[b.status] ||
       a.startDate.getTime() - b.startDate.getTime(),
   );
-  const selectedSprint = focusSprint ?? sprintsByRelevance[0] ?? null;
 
   const sprintTiming = (st: (typeof sprints)[number]) => {
     const DAY = 24 * 60 * 60 * 1000;
@@ -369,6 +377,7 @@ export default async function ProjectDetailPage({
         shownTasks,
         hasHiddenTasks: !canSeeAllTasks && tasks.length > shownTasks.length,
         canCreateTask: canCreateAnywhere || canSelfCreateHere,
+        canSeeAll: canSeeAllTasks,
         canRemove: canManageThisGroup(user, project, group) && tasks.length === 0,
         totalSeconds:
           !user.restrictToOwnTasks && (canViewGroupTimeRollup(user, project, group) || isCalendarPipelineOversight)
@@ -378,6 +387,17 @@ export default async function ProjectDetailPage({
     })
     .filter((c) => c.visible)
     .sort((a, b) => groupRelevance(user, a.group) - groupRelevance(user, b.group));
+
+  // A viewer who can't see every task in a Sprint-enabled group (e.g. a Contributor) only sees the
+  // sprints that hold a task they can see — not other people's sprints — and counts only those tasks.
+  const seesAllSprintTasks = groupCards.some((c) => c.group.pod?.sprintWorkflowEnabled && c.canSeeAll);
+  const visibleTopLevelTasks = groupCards.flatMap((c) => c.shownTasks);
+  const visibleSprintIds = new Set(
+    sprints
+      .filter((sp) => seesAllSprintTasks || visibleTopLevelTasks.some((t) => t.sprintId === sp.id))
+      .map((sp) => sp.id),
+  );
+  const visibleSprintsByRelevance = sprintsByRelevance.filter((sp) => visibleSprintIds.has(sp.id));
 
   const shownUngroupedTasks = isOversight
     ? ungroupedTasks
@@ -446,16 +466,122 @@ export default async function ProjectDetailPage({
     }))
     .sort((a, b) => Number(!!a.sprintId) - Number(!!b.sprintId) || a.name.localeCompare(b.name));
 
-  // Sprints get their own tab, shown only when this project has a Sprint-enabled discipline.
+  // Bugs tab (shown only when a Bug-Tracking team the viewer can see is on this project): the project's
+  // bugs grouped into bug sprints — a category (Frontend, Backend, Regression Retesting…) with a due date.
+  // Bugs follow the same visibility as the task list (shownTasks), so counts always match the board.
+  const bugGroupCards = groupCards.filter((c) => c.group.pod?.bugTrackingEnabled);
+  const hasBugTracking = bugGroupCards.length > 0;
+  const bugGroupsAll = project.taskGroups.filter((g) => g.pod?.bugTrackingEnabled);
+  const canManageBugSprintsHere = canManageBugSprints(user, project, bugGroupsAll);
+  const canReportBugHere = bugGroupCards.some((c) => c.canCreateTask);
+  const bugSprints = hasBugTracking
+    ? await prisma.bugSprint.findMany({ where: { projectId: project.id }, orderBy: [{ dueDate: "asc" }, { name: "asc" }] })
+    : [];
+  const shownBugs = bugGroupCards.flatMap((c) =>
+    c.shownTasks.filter((t) => t.taskType === "BUG").map((t) => ({ t, groupName: c.group.name, group: c.group })),
+  );
+  const bugSprintById = new Map(bugSprints.map((b) => [b.id, b]));
+  const bugsByBugSprint: Record<string, ViewTask[]> = {};
+  const bugRowsRaw: Record<string, typeof shownBugs> = {};
+  for (const entry of shownBugs) {
+    const key = entry.t.bugSprintId && bugSprintById.has(entry.t.bugSprintId) ? entry.t.bugSprintId : "none";
+    (bugsByBugSprint[key] ??= []).push(toViewTask(entry.t, project.id, runningTaskIds));
+    (bugRowsRaw[key] ??= []).push(entry);
+  }
+  // Same rule as Sprints: unless the viewer sees every bug on a Bug-Tracking team, only bug sprints that hold
+  // a bug they can see are listed.
+  const seesAllBugs = bugGroupCards.some((c) => c.canSeeAll);
+  const bugSprintRows: BugSprintRow[] = bugSprints
+    .filter((b) => seesAllBugs || (bugRowsRaw[b.id] ?? []).length > 0)
+    .map((b) => {
+      const counts = bugCountsOf((bugRowsRaw[b.id] ?? []).map((e) => e.t));
+      const timing = bugSprintTiming(b.dueDate, counts, now);
+      return {
+        id: b.id,
+        name: b.name,
+        dueLabel: formatDate(b.dueDate),
+        dueInput: b.dueDate.toISOString().slice(0, 10),
+        bugCount: counts.total,
+        counts,
+        timingLabel: timing.label,
+        timingTone: timing.tone,
+        dueMs: b.dueDate.getTime(),
+        finished: counts.total > 0 && counts.completed === counts.total,
+      };
+    })
+    // Soonest due first; a bug sprint whose bugs are all closed drops to the bottom.
+    .sort((a, b) => Number(a.finished) - Number(b.finished) || a.dueMs - b.dueMs)
+    .map(({ dueMs: _d, finished: _f, ...row }) => row);
+  if ((bugRowsRaw.none ?? []).length > 0) {
+    const counts = bugCountsOf((bugRowsRaw.none ?? []).map((e) => e.t));
+    bugSprintRows.push({
+      id: "none",
+      name: "Not in a bug sprint",
+      isBucket: true,
+      dueLabel: "",
+      dueInput: "",
+      bugCount: counts.total,
+      counts,
+      timingLabel: "",
+      timingTone: "muted",
+    });
+  }
+  // Existing bugs this person could file under a bug sprint (open ones they manage or own).
+  const bugCandidates = shownBugs
+    .filter(({ t }) => t.status !== "COMPLETED" && canAssignBugToBugSprint(user, project, bugGroupsAll, t))
+    .map(({ t, groupName }) => {
+      const current = t.bugSprintId ? bugSprintById.get(t.bugSprintId) : null;
+      return {
+        id: t.id,
+        name: t.name,
+        groupName,
+        assigneeName: t.assignedTo?.name ?? null,
+        sprintId: current?.id ?? null,
+        sprintName: current?.name ?? null,
+      };
+    })
+    .sort((a, b) => Number(!!a.sprintId) - Number(!!b.sprintId) || a.name.localeCompare(b.name));
+
+  // Bulk assign (a team Lead triaging a batch): the open bugs on teams this viewer leads, and the people on
+  // those teams they can be handed to. Empty for everyone else, so the button never shows.
+  const assignableBugEntries = shownBugs.filter(({ t, group }) => t.status !== "COMPLETED" && canAssignAnyoneInGroup(user, group));
+  const assignPools = assignableBugEntries.length
+    ? await Promise.all(
+        bugGroupsAll.filter((g) => canAssignAnyoneInGroup(user, g)).map((g) => getGroupAssigneePool(g, project.clusterId)),
+      )
+    : [];
+  const bugAssigneeOptions = Array.from(new Map(assignPools.flat().map((u) => [u.id, u])).values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  const assignableBugs = assignableBugEntries.map(({ t, groupName }) => ({
+    id: t.id,
+    name: t.name,
+    groupName,
+    assigneeName: t.assignedTo?.name ?? null,
+    sprintId: t.bugSprintId && bugSprintById.has(t.bugSprintId) ? t.bugSprintId : null,
+    sprintName: null,
+    badge: statusLabel(t.status, "BUG"),
+  }));
+
+  // Sprints and Bugs get their own tabs, shown only when the project has the matching discipline.
   const activeTab =
-    tabParam === "overview" ? "overview" : tabParam === "sprints" && hasSprintWorkflow ? "sprints" : "tasks";
+    tabParam === "overview"
+      ? "overview"
+      : tabParam === "sprints" && hasSprintWorkflow
+        ? "sprints"
+        : tabParam === "bugs" && hasBugTracking
+          ? "bugs"
+          : "tasks";
   const taskCount = flatViewTasks.length;
   const deadlinePassed =
     !!project.deadline && project.deadline < now && project.status !== "COMPLETED" && project.status !== "CANCELLED";
   const tabs: { key: string; label: string; href: string; count: number | undefined }[] = [
     { key: "tasks", label: "Tasks", href: `/projects/${project.id}`, count: taskCount },
     ...(hasSprintWorkflow
-      ? [{ key: "sprints", label: "Sprints", href: `/projects/${project.id}?tab=sprints`, count: sprints.length }]
+      ? [{ key: "sprints", label: "Sprints", href: `/projects/${project.id}?tab=sprints`, count: visibleSprintIds.size }]
+      : []),
+    ...(hasBugTracking
+      ? [{ key: "bugs", label: "Bugs", href: `/projects/${project.id}?tab=bugs`, count: shownBugs.length }]
       : []),
     { key: "overview", label: "Overview", href: `/projects/${project.id}?tab=overview`, count: undefined },
   ];
@@ -587,7 +713,7 @@ export default async function ProjectDetailPage({
               (?sprint=, e.g. from the Sprints menu) starts open; otherwise the Active one does. */}
           <SprintsSection
             surfacePath={`/projects/${project.id}`}
-            defaultOpenId={selectedSprint?.id ?? null}
+            defaultOpenId={(focusSprint && visibleSprintIds.has(focusSprint.id) ? focusSprint : visibleSprintsByRelevance[0])?.id ?? null}
             canManage={canManageSprintsHere}
             createAction={createSprintWithId}
             updateAction={updateSprint}
@@ -595,10 +721,13 @@ export default async function ProjectDetailPage({
             addTasksAction={addTasksToSprint}
             candidates={sprintCandidates}
             tasksBySprint={Object.fromEntries(
-              sprintsByRelevance.map((sp) => [sp.id, flatViewTasks.filter((t) => t.sprintId === sp.id)]),
+              visibleSprintsByRelevance.map((sp) => [sp.id, flatViewTasks.filter((t) => t.sprintId === sp.id)]),
             )}
-            sprints={sprintsByRelevance.map((sp) => {
+            sprints={visibleSprintsByRelevance.map((sp) => {
               const timing = sprintTiming(sp);
+              const counts = seesAllSprintTasks
+                ? sprintCountsFor(sprintCounts, sp.id)
+                : bugCountsOf(visibleTopLevelTasks.filter((t) => t.sprintId === sp.id));
               return {
                 id: sp.id,
                 name: sp.name,
@@ -607,13 +736,33 @@ export default async function ProjectDetailPage({
                 endLabel: formatDate(sp.endDate),
                 startInput: sp.startDate.toISOString().slice(0, 10),
                 endInput: sp.endDate.toISOString().slice(0, 10),
-                taskCount: sp._count.tasks,
+                taskCount: seesAllSprintTasks ? sp._count.tasks : counts.total,
                 datesLocked: sp.status !== "PLANNED",
-                counts: sprintCountsFor(sprintCounts, sp.id),
+                counts,
                 timingLabel: timing.label,
                 timingTone: timing.tone,
               };
             })}
+          />
+        </div>
+      ) : activeTab === "bugs" ? (
+        <div className="pt-4">
+          <BugsSection
+            projectId={project.id}
+            surfacePath={`/projects/${project.id}`}
+            canManage={canManageBugSprintsHere}
+            canReport={canReportBugHere}
+            defaultOpenId={bugSprintParam ?? null}
+            sprints={bugSprintRows}
+            bugsBySprint={bugsByBugSprint}
+            candidates={bugCandidates}
+            assignable={assignableBugs}
+            assigneeOptions={bugAssigneeOptions}
+            assignAction={assignBugsInBulk.bind(null, project.id)}
+            createAction={createBugSprint.bind(null, project.id)}
+            updateAction={updateBugSprint}
+            deleteAction={deleteBugSprint}
+            addBugsAction={addBugsToBugSprint}
           />
         </div>
       ) : (

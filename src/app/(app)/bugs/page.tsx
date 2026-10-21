@@ -17,6 +17,7 @@ import { ReportBugButton } from "@/components/report-bug-button";
 import { TaskRow } from "@/components/task-row";
 import { BUG_PROGRESS_LABELS, SprintProgress } from "@/components/sprint-progress";
 import type { SprintCounts } from "@/lib/sprint-dashboard";
+import { bugCountsOf, bugSprintTiming } from "@/lib/bug-sprints";
 
 const SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
 const SEVERITY_CHIP: Record<string, string> = {
@@ -33,6 +34,8 @@ type SearchParams = {
   status?: string;
   severity?: string;
   assignee?: string;
+  bugSprint?: string;
+  show?: string;
   reopened?: string;
 };
 
@@ -59,6 +62,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
       project: { select: { id: true, name: true, client: { select: { name: true } } } },
       assignedTo: { select: { id: true, name: true, location: true } },
       createdBy: { select: { id: true, name: true } },
+      bugSprint: { select: { id: true, name: true, dueDate: true } },
     },
   });
 
@@ -70,14 +74,41 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
       b.createdById === user.id,
   );
 
+  // Bug sprints of every project this person has bug access on — including ones with no bug in them yet.
+  const accessGroups = await prisma.taskGroup.findMany({ where: { id: { in: access.groupIds } }, select: { id: true, projectId: true } });
+  const accessProjectIds = Array.from(new Set(accessGroups.map((g) => g.projectId)));
+  // Projects where this person sees every bug (oversight) — they see all of its bug sprints. Anyone else only
+  // sees bug sprints that hold a bug of theirs.
+  const fullViewProjectIds = new Set(accessGroups.filter((g) => access.fullViewGroupIds.has(g.id)).map((g) => g.projectId));
+  const bugSprintsRaw = await prisma.bugSprint.findMany({
+    where: { projectId: { in: accessProjectIds }, project: { archivedAt: null } },
+    include: { project: { select: { id: true, name: true, client: { select: { name: true } } } } },
+    orderBy: [{ dueDate: "asc" }, { name: "asc" }],
+  });
+
+  const allBugSprints = bugSprintsRaw.filter((sp) => fullViewProjectIds.has(sp.projectId) || all.some((b) => b.bugSprintId === sp.id));
+
   // ---- filter options from what this person can see ----
-  const projectOptions = Array.from(new Map(all.map((b) => [b.projectId, `${b.project.name} · ${b.project.client.name}`])).entries()).sort(
-    (a, b) => a[1].localeCompare(b[1]),
-  );
+  // Every project this person has bug access on — not just those that already have a bug they can see —
+  // so a project with only a bug sprint (or nothing yet) can still be picked.
+  const accessProjects = await prisma.project.findMany({
+    where: { id: { in: accessProjectIds }, archivedAt: null },
+    select: { id: true, name: true, client: { select: { name: true } } },
+  });
+  const projectOptions = accessProjects
+    .map((pr) => [pr.id, `${pr.name} · ${pr.client.name}`] as [string, string])
+    .sort((a, b) => a[1].localeCompare(b[1]));
   const assigneeOptions = Array.from(
     new Map(all.filter((b) => b.assignedTo).map((b) => [b.assignedToId as string, b.assignedTo!.name])).entries(),
   ).sort((a, b) => a[1].localeCompare(b[1]));
   const hasUnassigned = all.some((b) => b.assignedToId === null);
+  // Bug sprints (category + due date) — named per project, so the label carries the project when
+  // more than one project's sprints are in play.
+  const multiProject = projectOptions.length > 1;
+  const bugSprintOptions = Array.from(
+    new Map(allBugSprints.map((sp) => [sp.id, multiProject || accessProjectIds.length > 1 ? `${sp.name} · ${sp.project.name}` : sp.name])).entries(),
+  ).sort((a, b) => a[1].localeCompare(b[1]));
+  const hasNoBugSprint = all.some((b) => b.bugSprintId === null);
 
   // ---- read + validate filters ----
   const sp = await searchParams;
@@ -93,8 +124,17 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
       : assigneeOptions.some(([id]) => id === sp.assignee)
         ? (sp.assignee as string)
         : "";
+  const bugSprintFilter =
+    sp.bugSprint === "none" && hasNoBugSprint
+      ? "none"
+      : bugSprintOptions.some(([id]) => id === sp.bugSprint)
+        ? (sp.bugSprint as string)
+        : "";
   const reopened = sp.reopened === "1";
-  const anyFilter = !!(q || project || sp.status || severity || assignee || reopened);
+  // What to list: bugs and their bug sprints together (default), just the bugs, or just the bug sprints.
+  const show = sp.show === "bugs" || sp.show === "sprints" ? sp.show : "all";
+  const dataFilter = !!(q || project || (sp.status && sp.status !== "open") || severity || assignee || bugSprintFilter || reopened);
+  const anyFilter = dataFilter || show !== "all";
   const needle = q.toLowerCase();
   const now = new Date();
 
@@ -103,6 +143,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
       if (project && b.projectId !== project) return false;
       if (severity && b.severity !== severity) return false;
       if (assignee === "none" ? b.assignedToId !== null : assignee && b.assignedToId !== assignee) return false;
+      if (bugSprintFilter === "none" ? b.bugSprintId !== null : bugSprintFilter && b.bugSprintId !== bugSprintFilter) return false;
       if (reopened && b.revisionCount < 1) return false;
       if (status === "open" ? b.status === "COMPLETED" : status !== "all" && b.status !== status) return false;
       if (
@@ -110,6 +151,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
         !b.name.toLowerCase().includes(needle) &&
         !b.project.name.toLowerCase().includes(needle) &&
         !(b.assignedTo?.name ?? "").toLowerCase().includes(needle) &&
+        !(b.bugSprint?.name ?? "").toLowerCase().includes(needle) &&
         !b.createdBy.name.toLowerCase().includes(needle)
       ) {
         return false;
@@ -144,6 +186,33 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
     };
     g.bugs.push(b);
     projectGroups.set(b.projectId, g);
+  }
+  // Bug sprints listed under their project (narrowed by the Project / Bug sprint filters).
+  const visibleBugSprints = allBugSprints.filter(
+    (sp) =>
+      (!project || sp.projectId === project) &&
+      (!bugSprintFilter || bugSprintFilter === "none" || sp.id === bugSprintFilter),
+  );
+  if (show === "sprints") {
+    // Bug sprints only: a card for every project that has one, whatever its bugs.
+    projectGroups.clear();
+    for (const sp of visibleBugSprints) {
+      if (!projectGroups.has(sp.projectId)) {
+        projectGroups.set(sp.projectId, {
+          id: sp.projectId,
+          name: sp.project.name,
+          clientName: sp.project.client.name,
+          bugs: filtered.filter((b) => b.projectId === sp.projectId),
+        });
+      }
+    }
+  } else if (!dataFilter && show === "all") {
+    // A project with a bug sprint but no bug yet still gets its card.
+    for (const sp of visibleBugSprints) {
+      if (!projectGroups.has(sp.projectId)) {
+        projectGroups.set(sp.projectId, { id: sp.projectId, name: sp.project.name, clientName: sp.project.client.name, bugs: [] });
+      }
+    }
   }
   const byProject = Array.from(projectGroups.values()).sort(
     (x, y) => x.name.localeCompare(y.name) || x.clientName.localeCompare(y.clientName),
@@ -182,12 +251,65 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
   }));
   const todayKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
 
+  // A project's bug sprints as their own labelled block under its header: one clickable row per bug
+  // sprint (name, due date and timing, bug count, progress) that opens it in the project.
+  const TIMING_TONE: Record<string, string> = { ok: "text-green-700", warn: "text-amber-600", late: "text-gs-red", muted: "text-gs-gray" };
+  const projectSprintBlock = (projectId: string) => {
+    if (show === "bugs") return null;
+    const mine = visibleBugSprints.filter((sp) => sp.projectId === projectId);
+    if (mine.length === 0) return null;
+    return (
+      <div className="border-b border-gs-gray/10">
+        <p className="bg-gs-light/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
+          Bug sprints · {mine.length}
+        </p>
+        <ul className="max-h-72 divide-y divide-gs-gray/10 overflow-y-auto">
+          {mine.map((sp) => {
+            const counts = bugCountsOf(all.filter((b) => b.bugSprintId === sp.id));
+            const timing = bugSprintTiming(sp.dueDate, counts, now);
+            return (
+              <li key={sp.id}>
+                <Link
+                  href={`/projects/${sp.projectId}?tab=bugs&bugSprint=${sp.id}`}
+                  title="Open this bug sprint"
+                  className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 transition-colors hover:bg-gs-light/60"
+                >
+                  <span className="min-w-0 flex-1 basis-44 text-[15px] font-semibold leading-snug">{sp.name}</span>
+                  <span className="basis-36 text-xs">
+                    <span className="block text-gs-gray">Due {formatDate(sp.dueDate)}</span>
+                    <span className={`block font-medium ${TIMING_TONE[timing.tone]}`}>{timing.label}</span>
+                  </span>
+                  <span className="w-16 text-xs tabular-nums text-gs-gray">
+                    {counts.total} {counts.total === 1 ? "bug" : "bugs"}
+                  </span>
+                  <SprintProgress counts={counts} labels={BUG_PROGRESS_LABELS} size="sm" className="w-full sm:w-56" />
+                  <span aria-hidden className="hidden text-lg leading-none text-gs-gray sm:block">›</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  };
+
   // The project's name, client, bug count, "+ Add bug" and progress — the same header on the List
   // cards and on the per-project Kanban boards, so a project is always identifiable.
-  const projectHeader = (g: (typeof byProject)[number]) => (
+  const projectHeader = (g: (typeof byProject)[number]) => {
+    const sprintBlock = projectSprintBlock(g.id);
+    return (
+    <>
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gs-gray/10 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-[15px] font-semibold">{g.name}</h2>
+                      <h2 className="text-[15px] font-semibold">
+                        <Link
+                          href={`/projects/${g.id}?tab=bugs`}
+                          title="Open this project's Bugs tab"
+                          className="hover:text-gs-red hover:underline"
+                        >
+                          {g.name}
+                        </Link>
+                      </h2>
                       <span className="text-sm text-gs-gray">{g.clientName}</span>
                       <span className="rounded-full bg-gs-light px-2 py-0.5 text-xs font-semibold tabular-nums text-gs-gray">
                         {g.bugs.length} {g.bugs.length === 1 ? "bug" : "bugs"}
@@ -204,7 +326,15 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                       />
                     )}
                   </header>
-  );
+    {sprintBlock}
+    {sprintBlock && show === "all" && g.bugs.length > 0 && (
+      <p className="border-b border-gs-gray/10 bg-gs-light/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
+        Bugs · {g.bugs.length}
+      </p>
+    )}
+    </>
+    );
+  };
 
   // Kanban: one board per project (not one mixed board), each under its own header. The cards drop
   // the project line because the header above them already says it.
@@ -218,13 +348,15 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
         byProject.map((g) => (
           <section key={g.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
             {projectHeader(g)}
-            <div className="bg-gs-light/40 p-3 md:p-4">
-              <KanbanBoard
-                kind="bug"
-                surfacePath="/bugs"
-                tasks={viewTasks.filter((t) => t.projectId === g.id).map((t) => ({ ...t, projectLabel: undefined }))}
-              />
-            </div>
+            {g.bugs.length > 0 && (
+              <div className="bg-gs-light/40 p-3 md:p-4">
+                <KanbanBoard
+                  kind="bug"
+                  surfacePath="/bugs"
+                  tasks={viewTasks.filter((t) => t.projectId === g.id).map((t) => ({ ...t, projectLabel: undefined }))}
+                />
+              </div>
+            )}
           </section>
         ))
       )}
@@ -258,10 +390,19 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
             name="q"
             type="search"
             defaultValue={q}
-            placeholder="Bug, project or person…"
+            placeholder="Bug, project, sprint or person…"
             autoComplete="off"
             className="field field-sm w-full"
           />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="show" className="text-xs font-medium text-gs-gray">Show</label>
+          <Select id="show" name="show" defaultValue={show} className="field field-sm min-w-44">
+            <option value="all">Bugs &amp; bug sprints</option>
+            <option value="bugs">Bugs only</option>
+            <option value="sprints">Bug sprints only</option>
+          </Select>
         </div>
 
         {projectOptions.length > 1 && (
@@ -312,6 +453,19 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
           </div>
         )}
 
+        {bugSprintOptions.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="bugSprint" className="text-xs font-medium text-gs-gray">Bug sprint</label>
+            <Select id="bugSprint" name="bugSprint" defaultValue={bugSprintFilter} className="field field-sm min-w-44">
+              <option value="">Any bug sprint</option>
+              {hasNoBugSprint && <option value="none">Not in a bug sprint</option>}
+              {bugSprintOptions.map(([id, label]) => (
+                <option key={id} value={id}>{label}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+
         <label className="flex min-h-9 items-center gap-2 pb-0.5 text-sm text-gs-gray">
           <input type="checkbox" name="reopened" value="1" defaultChecked={reopened} className="h-4 w-4" />
           Reopened at least once
@@ -330,7 +484,22 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
       </AutoFilterForm>
 
       <div className="mt-6">
-        {/* List shows the bugs under their project; Kanban / Calendar show the same filtered bugs. */}
+        {show === "sprints" ? (
+          byProject.length === 0 ? (
+            <SectionCard title="Bug sprints">
+              <EmptyState text="No bug sprints yet. Create one from a project's Bugs tab." />
+            </SectionCard>
+          ) : (
+            <div className="flex flex-col gap-6">
+              {byProject.map((g) => (
+                <section key={g.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+                  {projectHeader(g)}
+                </section>
+              ))}
+            </div>
+          )
+        ) : (
+        /* List shows the bugs under their project; Kanban / Calendar show the same filtered bugs. */
         <TaskViews
           surfacePath="/bugs"
           tasks={viewTasks}
@@ -339,7 +508,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
           kind="bug"
           kanbanView={kanbanByProject}
         >
-          {filtered.length === 0 ? (
+          {byProject.length === 0 ? (
             <SectionCard title="Bugs">
               <EmptyState
                 text={
@@ -354,12 +523,16 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
               {byProject.map((g) => (
                 <section key={g.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
                   {projectHeader(g)}
+                  {g.bugs.length === 0 ? (
+                    <p className="px-4 py-4 text-sm text-gs-gray">No bugs reported on this project yet.</p>
+                  ) : (
                   <div className="table-scroll">
-                    <table className="w-full min-w-[760px] text-sm">
+                    <table className="w-full min-w-[860px] text-sm">
                       <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
                         <tr>
                           <th className="whitespace-nowrap px-4 py-2">Bug</th>
                           <th className="whitespace-nowrap px-4 py-2">Severity</th>
+                          <th className="whitespace-nowrap px-4 py-2">Bug sprint</th>
                           <th className="whitespace-nowrap px-4 py-2">Status</th>
                           <th className="whitespace-nowrap px-4 py-2">Assignee</th>
                           <th className="whitespace-nowrap px-4 py-2">Reported by</th>
@@ -392,6 +565,20 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${SEVERITY_CHIP[b.severity] ?? ""}`}>
                                     {SEVERITY_LABELS[b.severity] ?? b.severity}
                                   </span>
+                                ) : (
+                                  <span className="text-gs-gray">—</span>
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-2.5">
+                                {b.bugSprint ? (
+                                  <Link
+                                    href={`/projects/${b.projectId}?tab=bugs`}
+                                    className="font-medium hover:text-gs-red hover:underline"
+                                    title="Open this project's Bugs tab"
+                                  >
+                                    {b.bugSprint.name}
+                                    <span className="block text-xs font-normal text-gs-gray">due {formatDate(b.bugSprint.dueDate)}</span>
+                                  </Link>
                                 ) : (
                                   <span className="text-gs-gray">—</span>
                                 )}
@@ -430,11 +617,13 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                       </tbody>
                     </table>
                   </div>
+                  )}
                 </section>
               ))}
             </div>
           )}
         </TaskViews>
+        )}
       </div>
     </div>
     </TaskDrawerProvider>

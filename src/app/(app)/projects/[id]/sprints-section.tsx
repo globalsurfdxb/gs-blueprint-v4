@@ -15,6 +15,8 @@ export type SprintCandidate = {
   assigneeName: string | null;
   sprintId: string | null;
   sprintName: string | null;
+  /** Overrides the sprint badge on the row (e.g. a bug's status when picking bugs to assign). */
+  badge?: string;
 };
 
 export type SprintRow = {
@@ -60,7 +62,7 @@ const TIMING_STYLE: Record<SprintRow["timingTone"], string> = {
   muted: "text-gs-gray",
 };
 
-function Chevron({ open }: { open: boolean }) {
+export function Chevron({ open }: { open: boolean }) {
   return (
     <svg
       viewBox="0 0 20 20"
@@ -81,12 +83,18 @@ function Chevron({ open }: { open: boolean }) {
  * caller as a function of the current selection count, so the same list serves "add to this sprint"
  * and "create a new sprint with these tasks". Tasks already in another open sprint show that
  * sprint's name — adding them moves them. */
-function TaskChecklist({
+export function TaskChecklist({
   candidates,
   footer,
+  noun = "tasks",
+  unsetLabel = "Backlog",
 }: {
   candidates: SprintCandidate[];
   footer: (selectedCount: number) => React.ReactNode;
+  /** What the rows are called in the search box and empty state ("tasks", "bugs"). */
+  noun?: string;
+  /** Badge for a row that isn't in any sprint yet. */
+  unsetLabel?: string;
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -123,9 +131,9 @@ function TaskChecklist({
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search tasks, groups or people…"
+          placeholder={`Search ${noun}, groups or people…`}
           autoComplete="off"
-          aria-label="Search tasks"
+          aria-label={`Search ${noun}`}
           className="field field-sm w-full sm:w-72"
         />
         <label className="inline-flex items-center gap-2 text-xs text-gs-gray">
@@ -154,16 +162,16 @@ function TaskChecklist({
               </span>
               <span
                 className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                  c.sprintName ? "bg-amber-100 text-amber-700" : "bg-gs-light text-gs-gray"
+                  c.sprintName && !c.badge ? "bg-amber-100 text-amber-700" : "bg-gs-light text-gs-gray"
                 }`}
-                title={c.sprintName ? `Currently in ${c.sprintName} — adding moves it here` : "Not in any sprint yet"}
+                title={c.badge ? undefined : c.sprintName ? `Currently in ${c.sprintName} — adding moves it here` : `Not in a sprint yet`}
               >
-                {c.sprintName ? `In ${c.sprintName}` : "Backlog"}
+                {c.badge ?? (c.sprintName ? `In ${c.sprintName}` : unsetLabel)}
               </span>
             </label>
           </li>
         ))}
-        {visible.length === 0 && <li className="px-3 py-4 text-sm text-gs-gray">No tasks match your search.</li>}
+        {visible.length === 0 && <li className="px-3 py-4 text-sm text-gs-gray">No {noun} match your search.</li>}
       </ul>
 
       <div className="flex items-center justify-between gap-3 border-t border-gs-gray/10 bg-gs-light/50 px-3 py-2.5">

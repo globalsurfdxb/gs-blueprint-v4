@@ -215,13 +215,19 @@ export type SprintCounts = {
 
 const EMPTY_COUNTS: SprintCounts = { notStarted: 0, inProgress: 0, review: 0, completed: 0, total: 0 };
 
-/** Per-sprint task counts by status. Subtasks are personal breakdowns, so they are not counted. */
-export async function countSprintTasks(sprintIds: string[]): Promise<Map<string, SprintCounts>> {
+/** Per-sprint task counts by status. Subtasks are personal breakdowns, so they are not counted. With
+ * `ownerId`, only that person's own tasks are counted. */
+export async function countSprintTasks(sprintIds: string[], ownerId?: string): Promise<Map<string, SprintCounts>> {
   const out = new Map<string, SprintCounts>();
   if (sprintIds.length === 0) return out;
   const rows = await prisma.task.groupBy({
     by: ["sprintId", "status"],
-    where: { sprintId: { in: sprintIds }, parentTaskId: null },
+    where: {
+      sprintId: { in: sprintIds },
+      parentTaskId: null,
+      // Only the viewer's own tasks (assigned to or created by them) when `ownerId` is given.
+      ...(ownerId ? { OR: [{ assignedToId: ownerId }, { createdById: ownerId }] } : {}),
+    },
     _count: { _all: true },
   });
   for (const r of rows) {
@@ -257,14 +263,29 @@ export type SprintListRow = {
   completionPct: number;
 };
 
-/** Every sprint (any status) on the given projects, with completion counts, Active first. */
-export async function getSprintList(projectIds: string[]): Promise<SprintListRow[]> {
+/** Every sprint (any status) on the given projects, with completion counts, Active first. A viewer who
+ * doesn't oversee a project (e.g. a Contributor) only gets that project's sprints that hold a task of
+ * their own, counted from their own tasks — never other people's sprints or work. */
+export async function getSprintList(projectIds: string[], user: CurrentUser): Promise<SprintListRow[]> {
   if (projectIds.length === 0) return [];
-  const sprints = await prisma.sprint.findMany({
-    where: { projectId: { in: projectIds } },
-    include: { project: { select: { name: true, client: { select: { name: true } } } } },
-  });
-  const counts = await countSprintTasks(sprints.map((s) => s.id));
+  const [allSprints, groups] = await Promise.all([
+    prisma.sprint.findMany({
+      where: { projectId: { in: projectIds } },
+      include: { project: { select: { name: true, client: { select: { name: true } } } } },
+    }),
+    prisma.taskGroup.findMany({
+      where: { projectId: { in: projectIds }, pod: { sprintWorkflowEnabled: true } },
+      select: { leadUserId: true, clusterId: true, podId: true, project: { select: { id: true, clusterId: true } } },
+    }),
+  ]);
+  const overseen = new Set(
+    user.restrictToOwnTasks ? [] : groups.filter((g) => groupInScope(user, g)).map((g) => g.project.id),
+  );
+  const limitedIds = allSprints.filter((s) => !overseen.has(s.projectId)).map((s) => s.id);
+  const ownCounts = await countSprintTasks(limitedIds, user.id);
+  const sprints = allSprints.filter((s) => overseen.has(s.projectId) || (ownCounts.get(s.id)?.total ?? 0) > 0);
+  const fullCounts = await countSprintTasks(sprints.filter((s) => overseen.has(s.projectId)).map((s) => s.id));
+  const counts = new Map([...fullCounts, ...ownCounts]);
   const order = { ACTIVE: 0, PLANNED: 1, COMPLETED: 2 } as const;
   return sprints
     .map((s) => {

@@ -59,3 +59,17 @@ export async function resolveTaskAssigneeContext(
 
   return { canAssign, canReassign, canReassignBug, assignees };
 }
+
+/** Active people a group's Lead can hand work to: the pod's members (or the cluster's, for a legacy pod-less
+ * group). The same pool the task drawer's Assignee picker offers. */
+export async function getGroupAssigneePool(
+  group: { podId: string | null; clusterId: string | null },
+  projectClusterId: string,
+): Promise<{ id: string; name: string }[]> {
+  const roles = await prisma.userRole.findMany({
+    where: group.podId ? { podId: group.podId } : { clusterId: group.clusterId ?? projectClusterId },
+    include: { user: true },
+    distinct: ["userId"],
+  });
+  return roles.filter((r) => r.user.isActive).map((r) => ({ id: r.user.id, name: r.user.name }));
+}

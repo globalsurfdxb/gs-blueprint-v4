@@ -36,7 +36,7 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
   if (projectIds.length === 0) redirect("/");
 
   const [all, manageableProjects] = await Promise.all([
-    getSprintList(projectIds),
+    getSprintList(projectIds, user),
     getManageableSprintProjects(user, projectIds),
   ]);
 
