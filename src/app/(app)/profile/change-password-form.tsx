@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { changePassword, type ChangePasswordState } from "@/lib/actions/profile";
+import { PasswordInput } from "@/components/password-input";
 
 const initialState: ChangePasswordState = { ok: false, message: "" };
 
@@ -35,18 +36,18 @@ export function ChangePasswordForm() {
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="currentPassword" className="text-sm font-medium">Current Password</label>
-        <input id="currentPassword" name="currentPassword" type="password" autoComplete="current-password" required className={inputClass} />
+        <PasswordInput id="currentPassword" name="currentPassword" autoComplete="current-password" required className={inputClass} />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="newPassword" className="text-sm font-medium">New Password</label>
-        <input id="newPassword" name="newPassword" type="password" autoComplete="new-password" required className={inputClass} />
+        <PasswordInput id="newPassword" name="newPassword" autoComplete="new-password" required className={inputClass} />
         <p className="text-xs text-gs-gray">At least 8 characters.</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="confirmPassword" className="text-sm font-medium">Confirm New Password</label>
-        <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required className={inputClass} />
+        <PasswordInput id="confirmPassword" name="confirmPassword" autoComplete="new-password" required className={inputClass} />
       </div>
 
       {state.message && (

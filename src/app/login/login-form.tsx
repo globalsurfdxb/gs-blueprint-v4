@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PasswordInput } from "@/components/password-input";
 
 export function LoginForm({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
@@ -53,14 +54,12 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
         <label htmlFor="password" className="text-sm font-medium text-gs-black">
           Password
         </label>
-        <input
+        <PasswordInput
           id="password"
-          type="password"
           required
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="field"
         />
       </div>
 

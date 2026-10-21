@@ -8,6 +8,7 @@ import { DeleteUserButton } from "./delete-user-button";
 import { ReassignDeleteForm } from "./reassign-delete-form";
 import { PageHeader } from "@/components/page-header";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { PasswordInput } from "@/components/password-input";
 import { Select } from "@/components/select";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -145,26 +146,22 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="newPassword" className="text-sm font-medium">New password</label>
-            <input
+            <PasswordInput
               id="newPassword"
               name="newPassword"
-              type="password"
               autoComplete="new-password"
               minLength={8}
               required
-              className="field"
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="confirmPassword" className="text-sm font-medium">Confirm new password</label>
-            <input
+            <PasswordInput
               id="confirmPassword"
               name="confirmPassword"
-              type="password"
               autoComplete="new-password"
               minLength={8}
               required
-              className="field"
             />
           </div>
         </div>
