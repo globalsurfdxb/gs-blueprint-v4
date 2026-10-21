@@ -14,6 +14,7 @@ import { TaskStatusChip } from "@/components/task-chips";
 import { KanbanBoard, TaskViews, type ViewTask } from "@/components/task-views";
 import { TaskDrawerProvider, TaskOpener } from "@/components/task-drawer";
 import { ReportBugButton } from "@/components/report-bug-button";
+import { TaskRow } from "@/components/task-row";
 import { BUG_PROGRESS_LABELS, SprintProgress } from "@/components/sprint-progress";
 import type { SprintCounts } from "@/lib/sprint-dashboard";
 
@@ -373,7 +374,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                               ? null
                               : daysOverdue(b.dueDate, b.assignedTo?.location ?? FALLBACK_LOCATION, now);
                           return (
-                            <tr key={b.id} className="border-t border-gs-gray/10">
+                            <TaskRow key={b.id} taskId={b.id} projectId={b.projectId} className="border-t border-gs-gray/10">
                               <td className="px-4 py-2.5">
                                 <TaskOpener
                                   taskId={b.id}
@@ -423,7 +424,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                                 {formatDate(b.dueDate)}
                                 {late !== null && late > 0 && <span className="ml-1 text-gs-red">({late}d late)</span>}
                               </td>
-                            </tr>
+                            </TaskRow>
                           );
                         })}
                       </tbody>
