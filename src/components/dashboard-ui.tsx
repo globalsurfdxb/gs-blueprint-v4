@@ -144,6 +144,16 @@ export function SectionCard({
   );
 }
 
+/** A project's name with its client underneath — for a "Project" table cell. */
+export function ProjectLabel({ name, client }: { name: string; client: string }) {
+  return (
+    <>
+      <span className="block font-medium text-gs-black/80">{name}</span>
+      <span className="block text-xs text-gs-gray">{client}</span>
+    </>
+  );
+}
+
 /** Friendly empty state for a widget with nothing to show. */
 export function EmptyState({ text }: { text: string }) {
   return (

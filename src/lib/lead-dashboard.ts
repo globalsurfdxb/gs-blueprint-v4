@@ -67,7 +67,7 @@ export async function getLeadDashboardData(user: CurrentUser): Promise<LeadDashb
       // A Lead an Admin has restricted to their own tasks only rolls up their own work.
       ...(user.restrictToOwnTasks ? { OR: [{ assignedToId: user.id }, { createdById: user.id }] } : {}),
     },
-    include: { assignedTo: { select: { id: true, name: true, location: true } }, project: { select: { name: true } } },
+    include: { assignedTo: { select: { id: true, name: true, location: true } }, project: { select: { name: true, client: { select: { name: true } } } } },
     orderBy: { dueDate: "asc" },
   });
 
@@ -76,6 +76,7 @@ export async function getLeadDashboardData(user: CurrentUser): Promise<LeadDashb
     projectId: t.projectId,
     name: t.name,
     projectName: t.project.name,
+    clientName: t.project.client.name,
     assigneeName: t.assignedTo?.name ?? null,
     dueDate: formatDate(t.dueDate),
     status: t.status,

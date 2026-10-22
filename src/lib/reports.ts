@@ -93,6 +93,7 @@ export type OverdueRow = {
   name: string;
   projectId: string;
   projectName: string;
+  clientName: string;
   assigneeName: string | null;
   dueDate: string;
   daysLate: number;
@@ -108,7 +109,7 @@ export async function getOverdueReport(user: CurrentUser): Promise<OverdueCluste
     where: { ...taskWhere, parentTaskId: null, status: { notIn: ["COMPLETED", "ON_HOLD"] } },
     include: {
       assignedTo: { select: { name: true, location: true } },
-      project: { select: { id: true, name: true, cluster: { select: { name: true } } } },
+      project: { select: { id: true, name: true, client: { select: { name: true } }, cluster: { select: { name: true } } } },
     },
     orderBy: { dueDate: "asc" },
   });
@@ -122,6 +123,7 @@ export async function getOverdueReport(user: CurrentUser): Promise<OverdueCluste
       name: t.name,
       projectId: t.projectId,
       projectName: t.project.name,
+      clientName: t.project.client.name,
       assigneeName: t.assignedTo?.name ?? null,
       dueDate: formatDate(t.dueDate),
       daysLate: late,

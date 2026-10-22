@@ -16,6 +16,7 @@ export type SprintProgressRow = {
   name: string;
   projectId: string;
   projectName: string;
+  clientName: string;
   status: "PLANNED" | "ACTIVE" | "COMPLETED";
   totalTasks: number;
   completedTasks: number;
@@ -89,7 +90,7 @@ export async function getSprintProgressData(user: CurrentUser): Promise<SprintPr
       updatedAt: true,
       assignedToId: true,
       assignedTo: { select: { name: true, location: true } },
-      sprint: { select: { id: true, name: true, status: true, projectId: true, project: { select: { name: true } } } },
+      sprint: { select: { id: true, name: true, status: true, projectId: true, project: { select: { name: true, client: { select: { name: true } } } } } },
     },
   });
 
@@ -105,6 +106,7 @@ export async function getSprintProgressData(user: CurrentUser): Promise<SprintPr
         name: s.name,
         projectId: s.projectId,
         projectName: s.project.name,
+        clientName: s.project.client.name,
         status: s.status,
         totalTasks: 0,
         completedTasks: 0,

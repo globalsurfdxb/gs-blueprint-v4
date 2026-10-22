@@ -58,7 +58,10 @@ export default async function OverdueReportPage() {
                             {t.name}
                           </Link>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2 text-gs-gray">{t.projectName}</td>
+                        <td className="whitespace-nowrap px-4 py-2">
+                          <span className="block text-gs-black/80">{t.projectName}</span>
+                          <span className="block text-xs text-gs-gray">{t.clientName}</span>
+                        </td>
                         <td className="whitespace-nowrap px-4 py-2">
                           {t.assigneeName ? (
                             <span className="text-gs-gray">{t.assigneeName}</span>

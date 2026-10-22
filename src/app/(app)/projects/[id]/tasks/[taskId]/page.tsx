@@ -247,6 +247,7 @@ export default async function TaskDetailPage({
         <Link href={`/projects/${project.id}`} className="hover:underline">
           {project.name}
         </Link>
+        <span> · {project.client.name}</span>
         {task.parentTask && (
           <>
             {" › "}

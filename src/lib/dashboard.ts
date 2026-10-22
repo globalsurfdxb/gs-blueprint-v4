@@ -38,6 +38,7 @@ export type DashTask = {
   projectId: string;
   name: string;
   projectName: string;
+  clientName: string;
   assigneeName: string | null;
   dueDate: string;
   status: string;
@@ -123,7 +124,7 @@ export async function getDashboardData(user: CurrentUser): Promise<DashboardData
   // them here would double-count a deliverable against its own breakdown.
   const openTasks = await prisma.task.findMany({
     where: { ...taskScope, parentTaskId: null, status: { not: "COMPLETED" } },
-    include: { assignedTo: { select: { name: true, location: true } }, project: { select: { name: true } } },
+    include: { assignedTo: { select: { name: true, location: true } }, project: { select: { name: true, client: { select: { name: true } } } } },
     orderBy: { dueDate: "asc" },
   });
 
@@ -132,6 +133,7 @@ export async function getDashboardData(user: CurrentUser): Promise<DashboardData
     projectId: t.projectId,
     name: t.name,
     projectName: t.project.name,
+    clientName: t.project.client.name,
     assigneeName: t.assignedTo?.name ?? null,
     dueDate: formatDate(t.dueDate),
     status: t.status,

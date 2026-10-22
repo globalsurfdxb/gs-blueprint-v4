@@ -10,6 +10,8 @@ import { AutoFilterForm } from "@/components/auto-filter-form";
 import { TaskStatusChip } from "@/components/task-chips";
 import { statusLabel } from "@/lib/bug";
 import { Select } from "@/components/select";
+import { TaskRow } from "@/components/task-row";
+import { ProjectCardHeader } from "@/components/project-card-header";
 
 // The lens the page is shown through. "action" is the original queue (submitted for review, or
 // unassigned); the rest are the filtered lists the Lead dashboard's cards open (QA F-02), plus a
@@ -100,9 +102,9 @@ export default async function MyReviewsPage({
   // top of the "Show" view above; options come from what the view returned, so every choice has
   // at least one row behind it. ----
   const viewTasks = tasks;
-  const projectOptions = Array.from(new Map(viewTasks.map((t) => [t.projectId, t.project.name])).entries()).sort((a, b) =>
-    a[1].localeCompare(b[1]),
-  );
+  const projectOptions = Array.from(
+    new Map(viewTasks.map((t) => [t.projectId, { name: t.project.name, client: t.project.client.name }])).entries(),
+  ).sort((a, b) => a[1].name.localeCompare(b[1].name) || a[1].client.localeCompare(b[1].client));
   const assigneeOptions = Array.from(
     new Map(viewTasks.filter((t) => t.assignedTo).map((t) => [t.assignedToId as string, t.assignedTo!.name])).entries(),
   ).sort((a, b) => a[1].localeCompare(b[1]));
@@ -285,8 +287,8 @@ Work submitted for your review, or still unassigned, across every project you le
             <label htmlFor="project" className="text-xs font-medium text-gs-gray">Project</label>
             <Select id="project" name="project" defaultValue={fProject} className="field field-sm min-w-44">
               <option value="">All projects</option>
-              {projectOptions.map(([id, name]) => (
-                <option key={id} value={id}>{name}</option>
+              {projectOptions.map(([id, p]) => (
+                <option key={id} value={id} data-sub={p.client}>{p.name}</option>
               ))}
             </Select>
           </div>
@@ -386,11 +388,9 @@ Work submitted for your review, or still unassigned, across every project you le
         <div className="mt-6 flex flex-col gap-6">
           <h2 className="text-sm font-semibold uppercase text-gs-gray">Content Calendar Approvals</h2>
           {Array.from(calendarGroups.values()).map(({ project, tasks: projectTasks }) => (
-            <div key={project.id}>
-              <h3 className="text-sm font-semibold">
-                {project.name} <span className="text-gs-gray">· {project.client.name}</span>
-              </h3>
-              <div className="mt-2 overflow-hidden rounded-lg border border-gs-gray/15 bg-white">
+            <section key={project.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+              <ProjectCardHeader projectId={project.id} name={project.name} client={project.client.name} count={projectTasks.length} />
+              <div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[520px] text-sm">
                     <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
@@ -403,7 +403,7 @@ Work submitted for your review, or still unassigned, across every project you le
                     </thead>
                     <tbody>
                       {projectTasks.map((t) => (
-                        <tr key={t.id} className="border-t border-gs-gray/10">
+                        <TaskRow key={t.id} taskId={t.id} projectId={t.projectId} className="border-t border-gs-gray/10">
                           <td className="px-4 py-3">
                             <Link href={`/projects/${t.projectId}/tasks/${t.id}`} className="font-medium hover:underline">
                               {t.name}
@@ -416,24 +416,22 @@ Work submitted for your review, or still unassigned, across every project you le
                               {t.calendarStage === "content" ? "Approve → Design" : "Approve Final Delivery"}
                             </span>
                           </td>
-                        </tr>
+                        </TaskRow>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
 
       <div className="mt-6 flex flex-col gap-6">
         {Array.from(groups.values()).map(({ project, tasks: projectTasks }) => (
-          <div key={project.id}>
-            <h2 className="text-sm font-semibold">
-              {project.name} <span className="text-gs-gray">· {project.client.name}</span>
-            </h2>
-            <div className="mt-2 overflow-hidden rounded-lg border border-gs-gray/15 bg-white">
+          <section key={project.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+            <ProjectCardHeader projectId={project.id} name={project.name} client={project.client.name} count={projectTasks.length} />
+            <div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-sm">
                   <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
@@ -450,7 +448,7 @@ Work submitted for your review, or still unassigned, across every project you le
                     {projectTasks.map((t) => {
                       const late = daysOverdue(t.dueDate, t.assignedTo?.location, now);
                       return (
-                        <tr key={t.id} className="border-t border-gs-gray/10">
+                        <TaskRow key={t.id} taskId={t.id} projectId={t.projectId} className="border-t border-gs-gray/10">
                           <td className="px-4 py-3">
                             <Link href={`/projects/${t.projectId}/tasks/${t.id}`} className="font-medium hover:underline">
                               {t.parentTask ? `${t.parentTask.name} › ${t.name}` : t.name}
@@ -488,14 +486,14 @@ Work submitted for your review, or still unassigned, across every project you le
                               {t.revisionCount}
                             </span>
                           </td>
-                        </tr>
+                        </TaskRow>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
             </div>
-          </div>
+          </section>
         ))}
       </div>
     </div>

@@ -9,7 +9,9 @@ import { canViewDashboard, hasPersonalTaskList, isLead } from "@/lib/permissions
 import { formatDuration } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { statusLabel } from "@/lib/bug";
-import { DashboardHero, EmptyState, HeroPill, SectionCard, StatCard } from "@/components/dashboard-ui";
+import { getBugDashboardData, type BugDashboardData } from "@/lib/bug-dashboard";
+import { BugDashboardSection } from "@/components/bug-dashboard";
+import { DashboardHero, EmptyState, HeroPill, ProjectLabel, SectionCard, StatCard } from "@/components/dashboard-ui";
 
 
 
@@ -34,7 +36,9 @@ function TaskRows({ tasks, emptyText }: { tasks: DashTask[]; emptyText: string }
                   {t.name}
                 </Link>
               </td>
-              <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.projectName}</td>
+              <td className="whitespace-nowrap px-4 py-2.5">
+                <ProjectLabel name={t.projectName} client={t.clientName} />
+              </td>
               <td className="whitespace-nowrap px-4 py-2.5">
                 {t.assigneeName ? (
                   <span className="text-gs-gray">{t.assigneeName}</span>
@@ -105,7 +109,9 @@ function SprintProgressSection({ data }: { data: SprintProgressData }) {
                     <td className="px-4 py-2.5">
                       <Link href={`/projects/${s.projectId}`} className="font-medium hover:underline">{s.name}</Link>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{s.projectName}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5">
+                      <ProjectLabel name={s.projectName} client={s.clientName} />
+                    </td>
                     <td className="whitespace-nowrap px-4 py-2.5">
                       <span className={s.status === "ACTIVE" ? "font-medium text-green-600" : "text-gs-gray"}>
                         {s.status === "ACTIVE" ? "Active" : "Planned"}
@@ -166,10 +172,12 @@ function SprintProgressSection({ data }: { data: SprintProgressData }) {
 function LeadDashboard({
   data,
   sprintProgress,
+  bugData,
   user,
 }: {
   data: LeadDashboardData;
   sprintProgress: SprintProgressData;
+  bugData: BugDashboardData;
   user: { name: string; location: string };
 }) {
   if (!data.hasGroups) {
@@ -225,6 +233,14 @@ function LeadDashboard({
           <StatCard icon="revision" attention label="Revision-Flagged" value={data.flaggedCount} tone={data.flaggedCount > 0 ? "danger" : "default"} href="/my-reviews?view=flagged" />
         </div>
       </section>
+
+      {sprintProgress.inScope && (
+        <div className="mt-8">
+          <SprintProgressSection data={sprintProgress} />
+        </div>
+      )}
+
+      <BugDashboardSection data={bugData} />
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-2">
         <SectionCard title="Team Workload" count={data.team.length} className="xl:col-span-2">
@@ -286,7 +302,9 @@ function LeadDashboard({
                           {t.name}
                         </Link>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.projectName}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5">
+                <ProjectLabel name={t.projectName} client={t.clientName} />
+              </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.assigneeName ?? "Unassigned"}</td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{statusLabel(t.status, t.taskType)}</td>
                       <td className="px-4 py-2.5">
@@ -311,9 +329,6 @@ function LeadDashboard({
         </SectionCard>
       </div>
 
-      <div className="mt-8">
-        <SprintProgressSection data={sprintProgress} />
-      </div>
     </div>
   );
 }
@@ -326,11 +341,12 @@ export default async function DashboardPage() {
   // "My Team" roll-up; everyone else lands on their own task list, their real home.
   if (!canViewDashboard(user)) {
     if (isLead(user)) {
-      const [leadData, sprintProgress] = await Promise.all([
+      const [leadData, sprintProgress, bugData] = await Promise.all([
         getLeadDashboardData(user),
         getSprintProgressData(user),
+        getBugDashboardData(user),
       ]);
-      return <LeadDashboard data={leadData} sprintProgress={sprintProgress} user={user} />;
+      return <LeadDashboard data={leadData} sprintProgress={sprintProgress} bugData={bugData} user={user} />;
     }
     // A view-only Dependency Tracker (PRD 8.13) has no task list of their own — their home is
     // the dependency queue. Only redirect there if they actually hold a designation.
@@ -340,7 +356,11 @@ export default async function DashboardPage() {
     redirect(trackerCount > 0 ? "/dependencies" : hasPersonalTaskList(user) ? "/my-tasks" : "/projects");
   }
 
-  const [data, sprintProgress] = await Promise.all([getDashboardData(user), getSprintProgressData(user)]);
+  const [data, sprintProgress, bugData] = await Promise.all([
+    getDashboardData(user),
+    getSprintProgressData(user),
+    getBugDashboardData(user),
+  ]);
 
   // Due Today / Running Timers only render when non-empty; the on-track card spans the full row
   // when it has no neighbour so the grid never leaves a hole.
@@ -395,6 +415,14 @@ export default async function DashboardPage() {
           </div>
         </section>
       </div>
+
+      {sprintProgress.inScope && (
+        <div className="mt-8">
+          <SprintProgressSection data={sprintProgress} />
+        </div>
+      )}
+
+      <BugDashboardSection data={bugData} />
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-2">
         {/* On-track rollup — cluster-by-cluster for Admin, pod-by-pod for a Cluster Head. */}
@@ -473,7 +501,9 @@ export default async function DashboardPage() {
                         <Link href={`/projects/${t.projectId}/tasks/${t.id}`} className="font-medium hover:underline">
                           {t.name}
                         </Link>
-                        <p className="text-xs text-gs-gray">{t.projectName}</p>
+                        <p className="text-xs text-gs-gray">
+                          {t.projectName} · {t.clientName}
+                        </p>
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.assigneeName ?? "Unassigned"}</td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{statusLabel(t.status, t.taskType)}</td>
@@ -540,7 +570,9 @@ export default async function DashboardPage() {
                           {t.name}
                         </Link>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.projectName}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5">
+                <ProjectLabel name={t.projectName} client={t.clientName} />
+              </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.assigneeName ?? "Unassigned"}</td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{statusLabel(t.status, t.taskType)}</td>
                       <td className="px-4 py-2.5">
@@ -603,10 +635,6 @@ export default async function DashboardPage() {
         <SectionCard title="Bottlenecks — Stuck 3+ Days" count={data.bottlenecks.length} className="xl:col-span-2">
           <TaskRows tasks={data.bottlenecks} emptyText="Nothing stuck in progress or review." />
         </SectionCard>
-
-        <div className="xl:col-span-2">
-          <SprintProgressSection data={sprintProgress} />
-        </div>
       </div>
     </div>
   );
