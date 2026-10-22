@@ -4,8 +4,7 @@ import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { createTaskInDrawer } from "@/lib/actions/tasks";
 import { MULTI_UPLOAD_BYTES, shrinkImage } from "@/lib/shrink-image";
-import { TaskTypeProvider, useTaskType } from "@/components/task-type-context";
-import { TaskTypeFields } from "@/components/task-type-fields";
+import { TaskTypeProvider } from "@/components/task-type-context";
 import { AssigneeField } from "@/components/assignee-field";
 import { BugReportFields } from "@/components/bug-report-fields";
 import type { TaskCreateOptions } from "@/lib/actions/task-create";
@@ -130,39 +129,6 @@ export function CreateTaskPanel({
   );
 }
 
-function BugSprintField({
-  bugSprints,
-  initialId,
-  lockToBug,
-}: {
-  bugSprints: TaskCreateOptions["bugSprints"];
-  initialId: string | null;
-  lockToBug: boolean;
-}) {
-  const { taskType } = useTaskType();
-  if ((!lockToBug && taskType !== "BUG") || bugSprints.length === 0) return null;
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor="create-bug-sprint" className="text-sm font-medium">
-        Bug sprint <span className="text-gs-gray">(optional)</span>
-      </label>
-      <Select
-        id="create-bug-sprint"
-        name="bugSprintId"
-        defaultValue={bugSprints.some((b) => b.id === initialId) ? initialId ?? "" : ""}
-        className={fieldClass}
-      >
-        <option value="">Not in a bug sprint</option>
-        {bugSprints.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.name} · due {new Date(b.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-          </option>
-        ))}
-      </Select>
-    </div>
-  );
-}
-
 function CreateForm({
   options,
   initialGroupId,
@@ -242,10 +208,8 @@ function CreateForm({
           </SubmitButton>
         </>
       ) : (
-        // Keyed on the group so the Task Type resets to Standard when the group changes.
-        <TaskTypeProvider key={selectedGroup.id} initialType={bugMode && selectedGroup.bugTrackingEnabled ? "BUG" : "STANDARD"}>
-          {selectedGroup.bugTrackingEnabled && <TaskTypeFields lockToBug={bugMode} />}
-
+        // A plain task — bugs are reported separately (BugReportFields), so there is no Task Type choice.
+        <TaskTypeProvider key={selectedGroup.id} initialType="STANDARD">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="create-name" className="text-sm font-medium">Task Name</label>
             <input id="create-name" name="name" required className={fieldClass} />
@@ -264,11 +228,6 @@ function CreateForm({
             leadName={selectedGroup.leadName}
             bugTrackingEnabled={selectedGroup.bugTrackingEnabled}
           />
-
-          {/* Bug sprint (category + due date) — only for a bug, and only once the project has one. */}
-          {selectedGroup.bugTrackingEnabled && (
-            <BugSprintField bugSprints={options.bugSprints} initialId={initialBugSprintId} lockToBug={bugMode} />
-          )}
 
           {!bugMode && selectedGroup.canManageSprint && (
             <div className="flex flex-col gap-1.5">

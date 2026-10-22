@@ -245,6 +245,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
     isTimerRunning: false,
     dueKey: `${b.dueDate.getUTCFullYear()}-${String(b.dueDate.getUTCMonth() + 1).padStart(2, "0")}-${String(b.dueDate.getUTCDate()).padStart(2, "0")}`,
     dueLabel: formatDate(b.dueDate),
+    createdByName: b.createdBy.name,
     projectName: b.project.name,
     projectLabel: `${b.project.name} · ${b.project.client.name}`,
     sprintId: b.sprintId ?? null,
@@ -535,7 +536,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                           <th className="whitespace-nowrap px-4 py-2">Bug sprint</th>
                           <th className="whitespace-nowrap px-4 py-2">Status</th>
                           <th className="whitespace-nowrap px-4 py-2">Assignee</th>
-                          <th className="whitespace-nowrap px-4 py-2">Reported by</th>
+                          <th className="whitespace-nowrap px-4 py-2">Created By</th>
                           <th className="whitespace-nowrap px-4 py-2">Reopens</th>
                           <th className="whitespace-nowrap px-4 py-2">Due</th>
                         </tr>

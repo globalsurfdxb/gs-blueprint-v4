@@ -15,7 +15,8 @@ import { createPortal } from "react-dom";
  * state all behave exactly as they did with the plain element.
  */
 
-type Opt = { value: string; label: string; disabled: boolean; group: string | null };
+/** `sub` is an optional second line (from the option's `data-sub`), e.g. a project's client name. */
+type Opt = { value: string; label: string; disabled: boolean; group: string | null; sub: string | null };
 
 /** Show the search box once a list has more options than this (so every list of 4+ is searchable;
  * 2–3 choices such as Yes/No or Dubai/India stay a plain list). */
@@ -41,11 +42,11 @@ function readOptions(select: HTMLSelectElement): Opt[] {
     if (child instanceof HTMLOptGroupElement) {
       for (const o of Array.from(child.children)) {
         if (o instanceof HTMLOptionElement) {
-          out.push({ value: o.value, label: o.text, disabled: o.disabled || child.disabled, group: child.label });
+          out.push({ value: o.value, label: o.text, disabled: o.disabled || child.disabled, group: child.label, sub: o.dataset.sub ?? null });
         }
       }
     } else if (child instanceof HTMLOptionElement) {
-      out.push({ value: child.value, label: child.text, disabled: child.disabled, group: null });
+      out.push({ value: child.value, label: child.text, disabled: child.disabled, group: null, sub: child.dataset.sub ?? null });
     }
   }
   return out;
@@ -73,6 +74,7 @@ function parseOptions(children: React.ReactNode, group: string | null = null, gr
       value?: string | number;
       disabled?: boolean;
       label?: string;
+      "data-sub"?: string;
       children?: React.ReactNode;
     };
     if (child.type === "optgroup") {
@@ -84,6 +86,7 @@ function parseOptions(children: React.ReactNode, group: string | null = null, gr
         label,
         disabled: !!props.disabled || groupDisabled,
         group,
+        sub: props["data-sub"] ?? null,
       });
     } else if (child.type === Fragment) {
       out.push(...parseOptions(props.children, group, groupDisabled));
@@ -94,7 +97,7 @@ function parseOptions(children: React.ReactNode, group: string | null = null, gr
 
 const sameOptions = (a: Opt[], b: Opt[]) =>
   a.length === b.length &&
-  a.every((o, i) => o.value === b[i].value && o.label === b[i].label && o.disabled === b[i].disabled && o.group === b[i].group);
+  a.every((o, i) => o.value === b[i].value && o.label === b[i].label && o.disabled === b[i].disabled && o.group === b[i].group && o.sub === b[i].sub);
 
 export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   const { className = "", children, id, multiple, size, ...rest } = props;
@@ -161,12 +164,13 @@ function SingleSelect({
   const selectable = options.filter((o) => !(o.disabled && o.value === "")); // hide "Select…" placeholders
   const searchable = selectable.length > SEARCH_THRESHOLD;
   const q = query.trim().toLowerCase();
-  const visible = q ? selectable.filter((o) => o.label.toLowerCase().includes(q)) : selectable;
+  const fullLabel = (o: Opt) => (o.sub ? `${o.label} · ${o.sub}` : o.label);
+  const visible = q ? selectable.filter((o) => fullLabel(o).toLowerCase().includes(q)) : selectable;
 
   const current = options.find((o) => o.value === value);
   const showingPlaceholder = !current || (current.value === "" && current.disabled);
-  const triggerLabel = current ? current.label : "";
-  const longestLabel = options.reduce((best, o) => (o.label.length > best.length ? o.label : best), "");
+  const triggerLabel = current ? fullLabel(current) : "";
+  const longestLabel = options.reduce((best, o) => (fullLabel(o).length > best.length ? fullLabel(o) : best), "");
 
   const place = useCallback(() => {
     const t = triggerRef.current;
@@ -399,7 +403,10 @@ function SingleSelect({
                             : ""
                       } ${o.value === value ? "font-medium" : ""}`}
                     >
-                      <span className="min-w-0 break-words">{o.label}</span>
+                      <span className="min-w-0 break-words">
+                        {o.label}
+                        {o.sub && <span className="block text-xs font-normal text-gs-gray">{o.sub}</span>}
+                      </span>
                       {o.value === value && (
                         <svg
                           viewBox="0 0 20 20"

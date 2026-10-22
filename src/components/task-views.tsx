@@ -25,6 +25,8 @@ export type ViewTask = {
   isTimerRunning: boolean;
   dueKey: string; // YYYY-MM-DD in the viewer's own locale (computed server-side)
   dueLabel: string; // DD/MM/YYYY for display
+  /** Who created it — shown as its own row on the card when given. */
+  createdByName?: string | null;
   // Agile Sprint Workflow (PRD 8.14) — true when this task is in a Sprint whose status is
   // ACTIVE. Drives the optional "Active Sprint only" Kanban filter; false for Backlog tasks
   // and for any surface where Sprint Workflow doesn't apply.
@@ -113,15 +115,21 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // ---------- shared card bits ----------
 
 function CardMeta({ t, hideProject = false }: { t: ViewTask; hideProject?: boolean }) {
+  // One fact per row so each reads on its own: priority, due date, assignee, project.
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-gs-gray">
-      <span className="inline-flex items-center gap-1">
+    <div className="mt-1.5 flex flex-col gap-0.5 text-[11px] text-gs-gray">
+      <span className="inline-flex items-center gap-1.5">
         <span className={`inline-block h-2 w-2 rounded-full ${PRIORITY_DOT[t.priority] ?? "bg-gs-gray"}`} aria-hidden />
-        {t.priority.charAt(0) + t.priority.slice(1).toLowerCase()}
+        {t.priority.charAt(0) + t.priority.slice(1).toLowerCase()} priority
       </span>
-      <span>· {t.dueLabel}</span>
-      {t.assigneeName && <span>· {t.assigneeName}</span>}
-      {!hideProject && (t.projectLabel ?? t.projectName) && <span className="font-medium text-gs-gray">· {t.projectLabel ?? t.projectName}</span>}
+      <span>
+        Due <span className="font-medium text-gs-black/80">{t.dueLabel}</span>
+      </span>
+      {t.assigneeName && <span>Assigned to {t.assigneeName}</span>}
+      {t.createdByName && <span>Created by {t.createdByName}</span>}
+      {!hideProject && (t.projectLabel ?? t.projectName) && (
+        <span className="font-medium">{t.projectLabel ?? t.projectName}</span>
+      )}
     </div>
   );
 }

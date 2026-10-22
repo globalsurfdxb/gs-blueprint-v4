@@ -90,6 +90,7 @@ type RowInput = {
   taskType: string;
   assignedToId: string | null;
   assignedTo: { name: string; location: string } | null;
+  createdBy?: { name: string } | null;
   subtasks?: RowInput[];
 };
 
@@ -103,6 +104,7 @@ type GroupTaskRow = {
   taskType: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  createdByName: string | null;
   daysOverdue: number | null;
   isTimerRunning: boolean;
   subtasks: GroupTaskRow[];
@@ -119,6 +121,7 @@ function toGroupTaskRow(t: RowInput, now: Date, runningTaskIds: Set<string>): Gr
     taskType: t.taskType,
     assigneeId: t.assignedToId,
     assigneeName: t.assignedTo?.name ?? null,
+    createdByName: t.createdBy?.name ?? null,
     // A Completed task is historical record — "days late" no longer means anything once
     // it's done, so the badge is scoped to still-open work only (My Tasks doesn't need
     // this guard since it excludes Completed entirely, but Task Group view shows every status).
@@ -143,6 +146,7 @@ function toViewTask(
     revisionCount: number;
     dueDate: Date;
     assignedTo: { name: string } | null;
+    createdBy?: { name: string } | null;
     sprint?: { status: string } | null;
     sprintId?: string | null;
     groupId?: string | null;
@@ -161,6 +165,7 @@ function toViewTask(
     priority: t.priority,
     revisionCount: t.revisionCount,
     assigneeName: t.assignedTo?.name ?? null,
+    createdByName: t.createdBy?.name ?? null,
     isTimerRunning: runningTaskIds.has(t.id),
     inActiveSprint: t.sprint?.status === "ACTIVE",
     dueKey: `${t.dueDate.getUTCFullYear()}-${String(t.dueDate.getUTCMonth() + 1).padStart(2, "0")}-${String(t.dueDate.getUTCDate()).padStart(2, "0")}`,
@@ -251,8 +256,9 @@ export default async function ProjectDetailPage({
       // Subtasks nest under their parent (PRD 8.2.3) — never a flattened top-level row.
       include: {
         assignedTo: true,
+        createdBy: { select: { name: true } },
         sprint: { select: { status: true } },
-        subtasks: { include: { assignedTo: true, sprint: { select: { status: true } } }, orderBy: { createdAt: "asc" } },
+        subtasks: { include: { assignedTo: true, createdBy: { select: { name: true } }, sprint: { select: { status: true } } }, orderBy: { createdAt: "asc" } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -260,9 +266,10 @@ export default async function ProjectDetailPage({
       where: { task: { projectId: project.id } },
       select: { durationSeconds: true, startTime: true, task: { select: { groupId: true } } },
     }),
-    // Tasks (or subtasks) with a currently-running timer — surfaced in the list view (PRD 8.2.3).
+    // Tasks (or subtasks) where the VIEWER has a timer running — surfaced in the list view (PRD 8.2.3). Other
+    // people's running timers are not shown, so only the person who started a timer sees its badge.
     prisma.timeLog.findMany({
-      where: { endTime: null, task: { projectId: project.id } },
+      where: { endTime: null, userId: user.id, task: { projectId: project.id } },
       select: { taskId: true },
     }),
   ]);
@@ -399,6 +406,18 @@ export default async function ProjectDetailPage({
   );
   const visibleSprintsByRelevance = sprintsByRelevance.filter((sp) => visibleSprintIds.has(sp.id));
 
+  // A Lead (or Admin) can change a task's assignee straight from the list: the people on their team, per group.
+  const groupAssigneePools = new Map(
+    await Promise.all(
+      groupCards
+        .filter((c) => canAssignAnyoneInGroup(user, c.group))
+        .map(async (c) => [c.group.id, await getGroupAssigneePool(c.group, project.clusterId)] as const),
+    ),
+  );
+
+  // Bugs are managed on their own Bugs tab, so the Tasks tab (list, Kanban, Calendar) shows tasks only.
+  const notBug = (t: { taskType: string }) => t.taskType !== "BUG";
+
   const shownUngroupedTasks = isOversight
     ? ungroupedTasks
     : ungroupedTasks.filter((t) => t.assignedToId === user.id || t.createdById === user.id);
@@ -424,7 +443,9 @@ export default async function ProjectDetailPage({
   const flatViewTasks: ViewTask[] = [
     ...groupCards.flatMap((c) => c.shownTasks),
     ...shownUngroupedTasks,
-  ].flatMap((t) => [
+  ]
+    .filter(notBug)
+    .flatMap((t) => [
     toViewTask(t, project.id, runningTaskIds),
     ...(t.subtasks ?? []).map((s) => toViewTask(s, project.id, runningTaskIds)),
   ]);
@@ -449,7 +470,7 @@ export default async function ProjectDetailPage({
   const sprintById = new Map(sprints.map((sp) => [sp.id, sp]));
   const sprintCandidates = groupCards
     .filter((c) => c.group.pod?.sprintWorkflowEnabled)
-    .flatMap((c) => c.shownTasks.map((t) => ({ t, groupName: c.group.name })))
+    .flatMap((c) => c.shownTasks.filter(notBug).map((t) => ({ t, groupName: c.group.name })))
     .filter(({ t }) => {
       if (t.status === "COMPLETED") return false;
       if (!(canManageSprintsHere || t.assignedToId === user.id || t.createdById === user.id)) return false;
@@ -684,8 +705,9 @@ export default async function ProjectDetailPage({
               id: c.group.id,
               name: c.group.name,
               leadName: c.group.lead.name,
-              tasks: c.shownTasks.map((t) => toGroupTaskRow(t, now, runningTaskIds)),
+              tasks: c.shownTasks.filter(notBug).map((t) => toGroupTaskRow(t, now, runningTaskIds)),
               hasHiddenTasks: c.hasHiddenTasks,
+              assignees: groupAssigneePools.get(c.group.id) ?? [],
               canCreateTask: c.canCreateTask,
               canRemove: c.canRemove,
               totalSeconds: c.totalSeconds,
@@ -694,7 +716,7 @@ export default async function ProjectDetailPage({
               capacity: c.group.capacityHoursPerWeek?.toString() ?? null,
               canEditCapacity: canSetTeamCapacity(user, project, c.group),
             }))}
-            ungroupedTasks={shownUngroupedTasks.map((t) => toGroupTaskRow(t, now, runningTaskIds))}
+            ungroupedTasks={shownUngroupedTasks.filter(notBug).map((t) => toGroupTaskRow(t, now, runningTaskIds))}
             setCapacityAction={setTeamCapacity}
             canAttachGroups={canAttachGroups}
             availableLeadRoles={availableLeadRoles.map((r) => ({

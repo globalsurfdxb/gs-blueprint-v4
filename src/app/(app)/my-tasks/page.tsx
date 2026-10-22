@@ -11,8 +11,12 @@ import { KanbanBoard, TaskViews, type ViewTask } from "@/components/task-views";
 import { TaskDrawerProvider, TaskOpener } from "@/components/task-drawer";
 import { TaskRow } from "@/components/task-row";
 import { NewTaskButton } from "@/components/new-task-button";
+import { getCreatableProjects } from "@/lib/actions/task-create";
+import { isFailure } from "@/lib/action-result";
 import { PageHeader } from "@/components/page-header";
 import { PriorityPill, RevisionBadge, TaskStatusChip } from "@/components/task-chips";
+import { SprintProgress } from "@/components/sprint-progress";
+import { bugCountsOf } from "@/lib/bug-sprints";
 import { AutoFilterForm } from "@/components/auto-filter-form";
 import { Select } from "@/components/select";
 
@@ -27,7 +31,7 @@ export default async function MyTasksPage({
     project?: string;
     status?: string;
     priority?: string;
-    type?: string;
+    assignee?: string;
     due?: string;
   }>;
 }) {
@@ -59,10 +63,16 @@ export default async function MyTasksPage({
   // Completed work stays visible for a while so the Kanban "Completed" column and the list aren't
   // empty (QA A-04, D-04): everything open, plus anything completed in the last 30 days.
   const completedSince = new Date(now.getTime() - COMPLETED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const meId = user.id;
+  // My Tasks = tasks assigned to me PLUS tasks I created (even when handed to someone else — shown with an
+  // "Assigned to" tag so I can follow them). Bugs are managed separately, on the Bugs page.
   const allTasks = await prisma.task.findMany({
     where: {
-      assignedToId: user.id,
-      OR: [{ status: { not: "COMPLETED" } }, { status: "COMPLETED", completedAt: { gte: completedSince } }],
+      taskType: "STANDARD",
+      AND: [
+        { OR: [{ assignedToId: meId }, { createdById: meId }] },
+        { OR: [{ status: { not: "COMPLETED" } }, { status: "COMPLETED", completedAt: { gte: completedSince } }] },
+      ],
       project: {
         // Archived projects drop out for everyone.
         archivedAt: null,
@@ -72,6 +82,8 @@ export default async function MyTasksPage({
     },
     include: {
       project: { include: { client: true } },
+      assignedTo: { select: { id: true, name: true } },
+      createdBy: { select: { name: true } },
       parentTask: true,
       group: { select: { pod: { select: { sprintWorkflowEnabled: true } } } },
       sprint: { select: { id: true, name: true, status: true } },
@@ -115,9 +127,12 @@ export default async function MyTasksPage({
   // ---- Filter bar: search, project, status, priority, type, due. One server-side filter so the
   // List, Kanban, Calendar and By Due Date views always show exactly the same tasks. ----
   const projectOptions = Array.from(
-    new Map(sprintScoped.map((t) => [t.projectId, t.project.name])).entries(),
+    new Map(sprintScoped.map((t) => [t.projectId, { name: t.project.name, client: t.project.client.name }])).entries(),
+  ).sort((a, b) => a[1].name.localeCompare(b[1].name) || a[1].client.localeCompare(b[1].client));
+  // Assigned-to filter: "Me", or one of the people I handed a task to (only offered when there are any).
+  const assigneeOptions = Array.from(
+    new Map(sprintScoped.filter((t) => t.assignedToId && t.assignedToId !== meId).map((t) => [t.assignedToId as string, t.assignedTo?.name ?? "Unknown"])).entries(),
   ).sort((a, b) => a[1].localeCompare(b[1]));
-  const hasBugs = sprintScoped.some((t) => t.taskType === "BUG");
   const STATUS_FILTERS = ["open", "completed", "NEW", "IN_PROGRESS", "REVIEW", "ON_HOLD", "running"] as const;
   const PRIORITY_FILTERS = ["URGENT", "HIGH", "MEDIUM", "LOW"] as const;
   const DUE_FILTERS = ["overdue", "today", "week", "later"] as const;
@@ -126,15 +141,15 @@ export default async function MyTasksPage({
   const fProject = projectOptions.some(([id]) => id === sp.project) ? (sp.project as string) : "";
   const fStatus = (STATUS_FILTERS as readonly string[]).includes(sp.status ?? "") ? (sp.status as string) : "";
   const fPriority = (PRIORITY_FILTERS as readonly string[]).includes(sp.priority ?? "") ? (sp.priority as string) : "";
-  const fType = hasBugs && (sp.type === "BUG" || sp.type === "STANDARD") ? sp.type : "";
+  const fAssignee = sp.assignee === "me" || assigneeOptions.some(([id]) => id === sp.assignee) ? (sp.assignee as string) : "";
   const fDue = (DUE_FILTERS as readonly string[]).includes(sp.due ?? "") ? (sp.due as string) : "";
-  const anyFilter = !!(validSprintFilter || fQ || fProject || fStatus || fPriority || fType || fDue);
+  const anyFilter = !!(validSprintFilter || fQ || fProject || fStatus || fPriority || fAssignee || fDue);
   const needle = fQ.toLowerCase();
 
   const tasks = sprintScoped.filter((t) => {
     if (fProject && t.projectId !== fProject) return false;
     if (fPriority && t.priority !== fPriority) return false;
-    if (fType && t.taskType !== fType) return false;
+    if (fAssignee === "me" ? t.assignedToId !== meId : fAssignee && t.assignedToId !== fAssignee) return false;
     if (fStatus === "open" && t.status === "COMPLETED") return false;
     if (fStatus === "completed" && t.status !== "COMPLETED") return false;
     if (fStatus === "running" && !runningTaskIds.has(t.id)) return false;
@@ -163,7 +178,8 @@ export default async function MyTasksPage({
     taskType: t.taskType,
     priority: t.priority,
     revisionCount: t.revisionCount,
-    assigneeName: null,
+    assigneeName: t.assignedToId === meId ? null : (t.assignedTo?.name ?? "Unassigned"),
+    createdByName: t.createdById === meId ? null : t.createdBy.name,
     isTimerRunning: runningTaskIds.has(t.id),
     inActiveSprint: t.sprint?.status === "ACTIVE",
     dueKey: `${t.dueDate.getUTCFullYear()}-${String(t.dueDate.getUTCMonth() + 1).padStart(2, "0")}-${String(t.dueDate.getUTCDate()).padStart(2, "0")}`,
@@ -252,7 +268,7 @@ export default async function MyTasksPage({
   for (const t of openTasks) bucketed.get(bucketOf(t))!.push(t); // already sorted by dueDate asc
 
   // Count cards: all open work in the chosen sprint, independent of the filter bar.
-  const scopeOpen = sprintScoped.filter((t) => t.status !== "COMPLETED");
+  const scopeOpen = sprintScoped.filter((t) => t.status !== "COMPLETED" && t.assignedToId === meId);
   const scopeOverdue = scopeOpen.filter((t) => bucketOf(t) === "overdue").length;
   const scopeToday = scopeOpen.filter((t) => bucketOf(t) === "today").length;
 
@@ -287,11 +303,6 @@ export default async function MyTasksPage({
             >
               {t.name}
             </TaskOpener>
-            {t.taskType === "BUG" && (
-              <span className="ml-2 rounded-full bg-gs-red/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gs-red">
-                Bug
-              </span>
-            )}
             {runningTaskIds.has(t.id) && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-gs-red/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gs-red">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-gs-red" aria-hidden />
@@ -304,6 +315,16 @@ export default async function MyTasksPage({
           {formatDate(t.dueDate)}
           <OverdueBadge dueDate={t.dueDate} status={t.status} />
         </td>
+        <td className="whitespace-nowrap px-4 py-2.5">
+          {t.assignedToId === meId ? (
+            <span className="text-gs-gray">Me</span>
+          ) : (
+            <span className="font-medium" title="You created this task and handed it to someone else">
+              {t.assignedTo?.name ?? "No one"}
+            </span>
+          )}
+        </td>
+        <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.createdById === meId ? "Me" : t.createdBy.name}</td>
         <td className="whitespace-nowrap px-4 py-2.5">
           <PriorityPill priority={t.priority} />
         </td>
@@ -323,9 +344,6 @@ export default async function MyTasksPage({
         <td className="px-4 py-2">
           <span className="inline-flex items-center">
             <TaskOpener taskId={t.id} projectId={t.projectId} className="font-medium transition-colors hover:text-gs-red">{t.name}</TaskOpener>
-            {t.taskType === "BUG" && (
-              <span className="ml-2 rounded-full bg-gs-red/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gs-red">Bug</span>
-            )}
             {runningTaskIds.has(t.id) && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-gs-red/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gs-red">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-gs-red" aria-hidden />
@@ -339,6 +357,16 @@ export default async function MyTasksPage({
           {formatDate(t.dueDate)}
           <OverdueBadge dueDate={t.dueDate} status={t.status} />
         </td>
+        <td className="whitespace-nowrap px-4 py-2.5">
+          {t.assignedToId === meId ? (
+            <span className="text-gs-gray">Me</span>
+          ) : (
+            <span className="font-medium" title="You created this task and handed it to someone else">
+              {t.assignedTo?.name ?? "No one"}
+            </span>
+          )}
+        </td>
+        <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.createdById === meId ? "Me" : t.createdBy.name}</td>
         <td className="whitespace-nowrap px-4 py-2.5">
           <PriorityPill priority={t.priority} />
         </td>
@@ -383,12 +411,14 @@ export default async function MyTasksPage({
               </h2>
               <div className="mt-2 overflow-hidden rounded-lg border border-gs-gray/15 bg-white">
                 <div className="table-scroll">
-                  <table className="w-full min-w-[560px] text-sm">
+                  <table className="w-full min-w-[800px] text-sm">
                     <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
                       <tr>
                         <th className="whitespace-nowrap px-4 py-2">Task</th>
                         <th className="whitespace-nowrap px-4 py-2">Project</th>
                         <th className="whitespace-nowrap px-4 py-2">Due Date</th>
+                        <th className="whitespace-nowrap px-4 py-2">Assigned To</th>
+                        <th className="whitespace-nowrap px-4 py-2">Created By</th>
                         <th className="whitespace-nowrap px-4 py-2">Priority</th>
                         <th className="whitespace-nowrap px-4 py-2">Status</th>
                       </tr>
@@ -408,6 +438,44 @@ export default async function MyTasksPage({
     </div>
   );
 
+  // Projects this person may create a task in — a "+ Add task" shows on those projects' headings only.
+  const creatable = await getCreatableProjects();
+  const creatableIds = new Set(isFailure(creatable) ? [] : creatable.map((p) => p.id));
+  // Progress per project: ALL the top-level tasks listed for it (not just the filtered ones), so the bar
+  // always reads the project's real state on your plate.
+  const progressFor = (projectId: string) => {
+    const mine = sprintScoped.filter((t) => t.projectId === projectId && t.parentTaskId === null);
+    if (mine.length === 0) return null;
+    return <SprintProgress counts={bugCountsOf(mine)} size="sm" showLegend className="w-full" />;
+  };
+  const addTask = (projectId: string) =>
+    creatableIds.has(projectId) ? (
+      <NewTaskButton projectId={projectId} label="+ Add task" className="btn btn-secondary btn-sm shrink-0" />
+    ) : null;
+
+  // One header for a project on both the List and the Kanban: name (links to the project), client, task
+  // count and "+ Add task" on top, the progress bar underneath — all inside the project's own card.
+  const projectHeader = (project: Row["project"], count: number) => (
+    <header className="grid items-center gap-x-6 gap-y-3 border-b border-gs-gray/10 px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_minmax(16rem,32rem)_minmax(0,1fr)]">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-[15px] font-semibold leading-snug">
+            <Link href={`/projects/${project.id}`} title="Open this project's tasks" className="hover:text-gs-red hover:underline">
+              {project.name}
+            </Link>
+          </h2>
+          <span className="rounded-full bg-gs-light px-2 py-0.5 text-xs font-semibold tabular-nums text-gs-gray">
+            {count} {count === 1 ? "task" : "tasks"}
+          </span>
+        </div>
+        <p className="mt-0.5 text-sm text-gs-gray">{project.client.name}</p>
+      </div>
+      {/* Name on the left, a wide progress bar in the centre, "+ Add task" on the right; on a narrow screen they stack. */}
+      <div className="w-full">{progressFor(project.id)}</div>
+      <div className="sm:justify-self-end">{addTask(project.id)}</div>
+    </header>
+  );
+
   // Kanban: one board per project, each under the project's own heading (same grouping as the List).
   // The cards drop their project line because the heading above them already says it.
   const kanbanByProject = (
@@ -422,16 +490,9 @@ export default async function MyTasksPage({
             .filter((t) => t.projectId === project.id)
             .map((t) => ({ ...t, projectLabel: undefined, projectName: undefined }));
           return (
-            <section key={project.id}>
-              <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                <span aria-hidden className="h-2 w-2 rounded-full bg-gs-red" />
-                {project.name}
-                <span className="font-normal text-gs-gray">· {project.client.name}</span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold tabular-nums text-gs-gray shadow-sm">
-                  {projectTasks.length}
-                </span>
-              </h2>
-              <div className="mt-2">
+            <section key={project.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+              {projectHeader(project, projectTasks.length)}
+              <div className="bg-gs-light/40 p-3 md:p-4">
                 <KanbanBoard tasks={projectTasks} surfacePath="/my-tasks" />
               </div>
             </section>
@@ -483,8 +544,8 @@ export default async function MyTasksPage({
             <label htmlFor="project" className="text-xs font-medium text-gs-gray">Project</label>
             <Select id="project" name="project" defaultValue={fProject} className="field field-sm min-w-44">
               <option value="">All projects</option>
-              {projectOptions.map(([id, name]) => (
-                <option key={id} value={id}>{name}</option>
+              {projectOptions.map(([id, p]) => (
+                <option key={id} value={id} data-sub={p.client}>{p.name}</option>
               ))}
             </Select>
           </div>
@@ -526,13 +587,15 @@ export default async function MyTasksPage({
           </Select>
         </div>
 
-        {hasBugs && (
+        {assigneeOptions.length > 0 && (
           <div className="flex flex-col gap-1">
-            <label htmlFor="type" className="text-xs font-medium text-gs-gray">Type</label>
-            <Select id="type" name="type" defaultValue={fType} className="field field-sm min-w-32">
-              <option value="">Tasks &amp; bugs</option>
-              <option value="STANDARD">Tasks</option>
-              <option value="BUG">Bugs</option>
+            <label htmlFor="assignee" className="text-xs font-medium text-gs-gray">Assigned to</label>
+            <Select id="assignee" name="assignee" defaultValue={fAssignee} className="field field-sm min-w-40">
+              <option value="">Everyone</option>
+              <option value="me">Me</option>
+              {assigneeOptions.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
             </Select>
           </div>
         )}
@@ -584,22 +647,17 @@ export default async function MyTasksPage({
 
           <div className="flex flex-col gap-6">
             {Array.from(byProject.values()).map(({ project, parents }) => (
-          <div key={project.id}>
-            <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-              <span aria-hidden className="h-2 w-2 rounded-full bg-gs-red" />
-              {project.name}
-              <span className="font-normal text-gs-gray">· {project.client.name}</span>
-              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold tabular-nums text-gs-gray shadow-sm">
-                {parents.reduce((n, p) => n + (p.isOwn ? 1 : 0) + p.children.length, 0)}
-              </span>
-            </h2>
-            <div className="mt-2 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+          <section key={project.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+            {projectHeader(project, parents.reduce((n, p) => n + (p.isOwn ? 1 : 0) + p.children.length, 0))}
+            <div>
               <div className="table-scroll">
                 <table className="w-full min-w-[560px] text-sm">
                   <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
                     <tr>
                       <th className="whitespace-nowrap px-4 py-2">Task</th>
                       <th className="whitespace-nowrap px-4 py-2">Due Date</th>
+                      <th className="whitespace-nowrap px-4 py-2">Assigned To</th>
+                      <th className="whitespace-nowrap px-4 py-2">Created By</th>
                       <th className="whitespace-nowrap px-4 py-2">Priority</th>
                       <th className="whitespace-nowrap px-4 py-2">Status</th>
                       <th className="whitespace-nowrap px-4 py-2">Revisions</th>
@@ -614,7 +672,7 @@ export default async function MyTasksPage({
                           </TaskRow>
                         ) : (
                           <tr className="border-t border-gs-gray/10">
-                            <td className="px-4 py-2 text-gs-gray" colSpan={5}>
+                            <td className="px-4 py-2 text-gs-gray" colSpan={7}>
                               <Link
                                 href={`/projects/${parent.projectId}/tasks/${parent.parentTaskId}`}
                                 className="italic hover:underline"
@@ -636,7 +694,7 @@ export default async function MyTasksPage({
                 </table>
               </div>
             </div>
-          </div>
+          </section>
         ))}
           </div>
         </TaskViews>
