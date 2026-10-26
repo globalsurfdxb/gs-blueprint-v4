@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    // Browsers and crawlers ask for /favicon.ico by default; serve the GS monogram icon generated at /brand/favicon.
+    return [{ source: "/favicon.ico", destination: "/brand/favicon" }];
+  },
   // A stray package-lock.json in a parent folder makes Next infer the wrong workspace root.
   turbopack: {
     root: import.meta.dirname,

@@ -64,6 +64,7 @@ import { statusLabel, revisionCountLabel, SEVERITY_LABELS, ENVIRONMENT_LABELS } 
 import { BugImagesSection } from "./bug-images-section";
 import { uploadBugImage, removeBugImage } from "@/lib/actions/bug-images";
 import { formatLocalDate, formatLocalTime } from "@/lib/timezone";
+import { CopyTaskLink } from "@/components/copy-task-link";
 import { PageHeader } from "@/components/page-header";
 import { Select } from "@/components/select";
 
@@ -269,7 +270,12 @@ export default async function TaskDetailPage({
             )}
           </>
         }
-        actions={canDelete ? <DeleteTaskButton taskName={task.name} action={deleteTask.bind(null, task.id)} /> : undefined}
+        actions={
+          <>
+            <CopyTaskLink projectId={project.id} taskId={task.id} />
+            {canDelete && <DeleteTaskButton taskName={task.name} action={deleteTask.bind(null, task.id)} />}
+          </>
+        }
       />
 
       {/* Round Indicator (PRD 8.2.1 v1.22): this task's position in the handoff chain, shown

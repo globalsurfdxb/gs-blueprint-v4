@@ -446,7 +446,8 @@ Work submitted for your review, or still unassigned, across every project you le
                   </thead>
                   <tbody>
                     {projectTasks.map((t) => {
-                      const late = daysOverdue(t.dueDate, t.assignedTo?.location, now);
+                      // A completed task is never overdue — only still-open work shows days late.
+                      const late = t.status === "COMPLETED" ? null : daysOverdue(t.dueDate, t.assignedTo?.location, now);
                       return (
                         <TaskRow key={t.id} taskId={t.id} projectId={t.projectId} className="border-t border-gs-gray/10">
                           <td className="px-4 py-3">

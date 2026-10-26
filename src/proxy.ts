@@ -24,6 +24,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // /api/jobs/* uses its own CRON_SECRET bearer auth (see src/app/api/jobs/*), not session cookies.
-  // App icons (favicon, icon.svg, apple-icon.png) must load on the login screen too, before any session exists.
-  matcher: ["/((?!api/auth|api/jobs|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png).*)"],
+  // App icons and the GS Blueprint logo (favicon, icon.svg, the Apple icon, public/gs-*.svg) must load on the login
+  // screen too, before any session exists.
+  matcher: ["/((?!api/auth|api/jobs|_next/static|_next/image|favicon.ico|brand/favicon|icon.svg|apple-icon|gs-[a-z-]+\.svg).*)"],
 };

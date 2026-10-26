@@ -43,6 +43,8 @@ function dueInfo(
   const reference = completedAt ?? now;
   const late = daysOverdue(dueDate, location, reference); // days past due at that reference (null if not past)
   if (late !== null && late > 0) {
+    // Once completed it is no longer overdue — just a record of how late it was finished.
+    if (completedAt) return { tone: "gray", suffix: ` · completed ${late} day${late === 1 ? "" : "s"} late` };
     return { tone: "red", suffix: ` · ${late} day${late === 1 ? "" : "s"} overdue` };
   }
   if (!completedAt) {

@@ -39,7 +39,7 @@ export type SprintProgressData = {
 };
 
 /** Which of the candidate task groups fall in this viewer's oversight scope (Admin, the cluster's
- * Cluster Head, or the Lead who owns the group). Shared by Sprints and Bugs. */
+ * Cluster Head, an Account Manager of the cluster, or the Lead who owns the group). Shared by Sprints and Bugs. */
 export function groupInScope(
   user: CurrentUser,
   g: { leadUserId: string; clusterId: string | null; podId: string | null; project: { clusterId: string } },
@@ -53,6 +53,9 @@ export function groupInScope(
     if (restriction === null) return true;
     if (g.podId !== null && restriction.includes(g.podId)) return true;
   }
+  // An Account Manager (cluster-scoped Account/Client Services) oversees every project whose home cluster is
+  // theirs, so those projects' Sprints and Bugs show up for them too (read-only — they manage neither).
+  if (user.roles.some((r) => r.role === "ACCOUNT_CLIENT_SERVICES" && r.clusterId === g.project.clusterId)) return true;
   // The Lead who owns the group.
   return g.leadUserId === user.id;
 }

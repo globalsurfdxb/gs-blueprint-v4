@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -270,16 +271,26 @@ export function AppShell({
           collapsed ? "md:w-[4.5rem]" : "md:w-60"
         } ${navOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className={`flex h-16 shrink-0 items-center gap-2.5 px-5 ${collapsed ? "md:justify-center md:px-0" : ""}`}>
-          <span
-            aria-hidden
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-gs-red to-[#ff7a59] shadow-[0_6px_16px_-4px_rgba(230,62,49,0.7)]"
-          >
-            <span className="h-2.5 w-2.5 rounded-[3px] bg-white" />
-          </span>
-          <span className={`font-heading text-base font-semibold text-white ${collapsed ? "md:hidden" : ""}`}>
-            GS Blueprint
-          </span>
+        <div className={`flex h-16 shrink-0 items-center px-5 ${collapsed ? "md:justify-center md:px-0" : ""}`}>
+          {/* Full GS Blueprint logo; the sidebar collapses to just the GS monogram. */}
+          <Image
+            src="/gs-blueprint-logo-light.svg"
+            alt="GS Blueprint"
+            width={171}
+            height={28}
+            priority
+            unoptimized
+            className={`h-7 w-auto ${collapsed ? "md:hidden" : ""}`}
+          />
+          <Image
+            src="/gs-icon-light.svg"
+            alt="GS"
+            width={46}
+            height={28}
+            priority
+            unoptimized
+            className={`hidden h-7 w-auto ${collapsed ? "md:block" : ""}`}
+          />
         </div>
 
         <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-4">

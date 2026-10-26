@@ -125,7 +125,10 @@ export default async function DependencyTaskPage({ params }: { params: Promise<{
           <p className="text-xs uppercase text-gs-gray">Due Date</p>
           <p className="font-medium">
             {formatDate(task.dueDate)}
-            {overdue && (
+            {overdue && task.completedAt && (
+              <span className="ml-1 text-gs-gray">· completed {lateDays} day{lateDays === 1 ? "" : "s"} late</span>
+            )}
+            {overdue && !task.completedAt && (
               <span className="ml-1 text-gs-red">· {lateDays} day{lateDays === 1 ? "" : "s"} overdue</span>
             )}
           </p>

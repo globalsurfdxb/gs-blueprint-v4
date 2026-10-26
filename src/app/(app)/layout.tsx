@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/app-shell";
 import { getSprintProjectIds } from "@/lib/sprint-dashboard";
 import { getBugAccess } from "@/lib/bug-access";
+import { RESOLVED_REMINDER, teamUpdate } from "@/lib/notification-scope";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -14,7 +15,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const [unreadCount, openLog, dependencyTrackerCount, sprintProjectIds, bugAccess] = await Promise.all([
     prisma.notification.count({
-      where: { userId: user.id, isRead: false },
+      // The badge counts MY unread notifications — not team updates about other people's tasks, and not
+      // reminders for tasks that have since been completed.
+      where: { userId: user.id, isRead: false, NOT: [RESOLVED_REMINDER, teamUpdate(user.id)] },
     }),
     // The one running timer for this user, if any (endTime = null) — surfaced as a
     // live pill in the header so a forgotten running timer is visible from any page.

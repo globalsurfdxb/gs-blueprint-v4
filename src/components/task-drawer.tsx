@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useTransition, useCallback } from 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
+import { CopyTaskLink } from "@/components/copy-task-link";
 import { getTaskDrawerData, type TaskDrawerData } from "@/lib/actions/task-drawer";
 import { changeTaskStatusByDrag } from "@/lib/actions/task-status";
 import { reassignTask } from "@/lib/actions/tasks";
@@ -265,7 +266,10 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                       {data.discipline ? ` · ${data.discipline}` : ""}
                     </p>
                   </div>
-                  <button type="button" onClick={close} aria-label="Close" className="shrink-0 text-lg leading-none text-gs-gray hover:text-gs-black">✕</button>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <CopyTaskLink projectId={data.projectId} taskId={data.id} label="Copy link" className="inline-flex items-center rounded-md border border-gs-gray/25 px-2.5 py-1 text-xs font-medium text-gs-gray hover:border-gs-gray/50 hover:text-gs-black" />
+                    <button type="button" onClick={close} aria-label="Close" className="text-lg leading-none text-gs-gray hover:text-gs-black">✕</button>
+                  </div>
                 </div>
 
                 <div className={`flex flex-col gap-4 px-5 py-4 ${pending ? "opacity-60" : ""}`}>

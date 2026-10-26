@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { LoginForm } from "./login-form";
 
 export default async function LoginPage({
@@ -20,15 +21,8 @@ export default async function LoginPage({
 
       <div className="relative w-full max-w-sm rounded-2xl bg-white p-8 shadow-lg ring-1 ring-white/10">
         <div className="mb-7">
-          <div className="flex items-center gap-3">
-            <span
-              aria-hidden
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-gs-red to-[#ff7a59] shadow-[0_6px_16px_-4px_rgba(230,62,49,0.6)]"
-            >
-              <span className="h-3 w-3 rounded-[3px] bg-white" />
-            </span>
-            <h1 className="font-heading text-xl font-semibold tracking-tight">GS Blueprint</h1>
-          </div>
+          <h1 className="sr-only">GS Blueprint</h1>
+          <Image src="/gs-blueprint-logo.svg" alt="GS Blueprint" width={208} height={34} priority unoptimized className="h-[34px] w-auto" />
           <p className="mt-3 font-body text-sm text-gs-gray">Where your projects, tasks, and time live.</p>
         </div>
         <LoginForm redirectTo={redirectTo} />

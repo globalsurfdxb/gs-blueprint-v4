@@ -182,13 +182,28 @@ export function canManageClients(user: CurrentUser) {
   return isAdmin(user);
 }
 
+const DELIVERY_CLUSTER_NAME = "Project Delivery & Client Services";
+const ACCOUNT_SERVICES_CLUSTER_NAME = DELIVERY_CLUSTER_NAME;
+
 /**
  * Does this person have a personal "My Tasks" list? Account Managers (cluster-scoped
  * Account/Client Services) oversee projects rather than being assigned work, so the My Tasks
- * module is not part of their access.
+ * module is not part of their access — nor is it for the delivery cluster's Cluster Head.
  */
 export function hasPersonalTaskList(user: CurrentUser) {
-  return !isAnyAccountClientServices(user);
+  return !isAnyAccountClientServices(user) && !isDeliveryClusterHeadOnly(user);
+}
+
+/**
+ * The Cluster Head of the "Project Delivery & Client Services" cluster (an oversight role over the account
+ * managers, not a delivery team): they get neither a personal "My Tasks" list nor the Content Calendar in
+ * their menu. An Admin who also holds the role keeps everything.
+ */
+export function isDeliveryClusterHeadOnly(user: CurrentUser) {
+  return (
+    !isAdmin(user) &&
+    user.roles.some((r) => r.role === "CLUSTER_HEAD" && r.cluster?.name === DELIVERY_CLUSTER_NAME)
+  );
 }
 
 /** Creating a brand-new client: Admin or Accountant (intake) only — Account/Client
@@ -908,12 +923,12 @@ export function canViewContentCalendar(
  * all? Admin, a Social Media Lead, or any Cluster Head (oversight) — per-project authority
  * is still enforced by canViewContentCalendar once a project is selected. */
 export function canAccessContentCalendar(user: CurrentUser) {
+  if (isDeliveryClusterHeadOnly(user)) return false;
   return isAdmin(user) || isSocialMediaLead(user) || isAnyClusterHead(user);
 }
 
 // ---------- Account/Client Services assignment ----------
 
-const ACCOUNT_SERVICES_CLUSTER_NAME = "Project Delivery & Client Services";
 
 /**
  * Clients and Projects can each be assigned to one accountable Account/Client Services

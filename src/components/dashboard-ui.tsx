@@ -114,11 +114,14 @@ export function StatCard({
 }
 
 export function SectionCard({
+  id,
   title,
   count,
   className = "",
   children,
 }: {
+  /** Anchor id, so a tile or pill elsewhere on the page can link here ("#overdue-tasks"). */
+  id?: string;
   title: string;
   /** Item count badge beside the title; red when > 0 so a non-empty problem list stands out. */
   count?: number;
@@ -126,7 +129,7 @@ export function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className={`overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm ${className}`}>
+    <section id={id} className={`scroll-mt-24 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm ${className}`}>
       <h2 className="flex items-center gap-2 border-b border-gs-gray/10 px-4 py-3.5 text-[15px] font-semibold">
         {title}
         {count !== undefined && (
@@ -192,7 +195,16 @@ export function greetingFor(location: string): { greeting: string; dateLabel: st
 }
 
 /** A status pill for the hero banner: red = needs action, amber = watch, green = all clear. */
-export function HeroPill({ tone, children }: { tone: "danger" | "warn" | "ok" | "neutral"; children: React.ReactNode }) {
+export function HeroPill({
+  tone,
+  href,
+  children,
+}: {
+  tone: "danger" | "warn" | "ok" | "neutral";
+  /** Makes the pill a link (e.g. to the list of overdue tasks it counts). */
+  href?: string;
+  children: React.ReactNode;
+}) {
   const style =
     tone === "danger"
       ? { wrap: "bg-gs-red/20 ring-gs-red/40", dot: "bg-gs-red" }
@@ -201,11 +213,20 @@ export function HeroPill({ tone, children }: { tone: "danger" | "warn" | "ok" | 
         : tone === "ok"
           ? { wrap: "bg-white/10 ring-white/15", dot: "bg-green-400" }
           : { wrap: "bg-white/10 ring-white/15", dot: "bg-white/60" };
-  return (
-    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ring-1 ${style.wrap}`}>
+  const cls = `inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ring-1 ${style.wrap}`;
+  const inner = (
+    <>
       <span aria-hidden className={`h-2 w-2 rounded-full ${style.dot}`} />
       {children}
-    </span>
+      {href && <span aria-hidden>›</span>}
+    </>
+  );
+  return href ? (
+    <Link href={href} className={`${cls} transition hover:bg-white/20`}>
+      {inner}
+    </Link>
+  ) : (
+    <span className={cls}>{inner}</span>
   );
 }
 

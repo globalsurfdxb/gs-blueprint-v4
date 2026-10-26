@@ -209,14 +209,14 @@ function LeadDashboard({
             <HeroPill tone="ok">All clear — nothing waiting on you</HeroPill>
           ) : (
             <>
-              {data.reviewCount > 0 && <HeroPill tone="warn">{data.reviewCount} awaiting your review</HeroPill>}
-              {data.unassignedCount > 0 && <HeroPill tone="danger">{data.unassignedCount} unassigned</HeroPill>}
+              {data.reviewCount > 0 && <HeroPill tone="warn" href="/my-reviews">{data.reviewCount} awaiting your review</HeroPill>}
+              {data.unassignedCount > 0 && <HeroPill tone="danger" href="/my-reviews?view=unassigned">{data.unassignedCount} unassigned</HeroPill>}
               {overdueN > 0 && (
-                <HeroPill tone="danger">
+                <HeroPill tone="danger" href="/my-reviews?view=overdue">
                   {overdueN} overdue {overdueN === 1 ? "task" : "tasks"}
                 </HeroPill>
               )}
-              {data.flaggedCount > 0 && <HeroPill tone="warn">{data.flaggedCount} revision-flagged</HeroPill>}
+              {data.flaggedCount > 0 && <HeroPill tone="warn" href="/my-reviews?view=flagged">{data.flaggedCount} revision-flagged</HeroPill>}
             </>
           )
         }
@@ -382,8 +382,16 @@ export default async function DashboardPage() {
             <HeroPill tone="ok">All clear — nothing overdue or due today</HeroPill>
           ) : (
             <>
-              {overdueN > 0 && <HeroPill tone="danger">{overdueN} overdue {overdueN === 1 ? "task" : "tasks"}</HeroPill>}
-              {dueTodayN > 0 && <HeroPill tone="warn">{dueTodayN} due today</HeroPill>}
+              {overdueN > 0 && (
+                <HeroPill tone="danger" href="#overdue-tasks">
+                  {overdueN} overdue {overdueN === 1 ? "task" : "tasks"}
+                </HeroPill>
+              )}
+              {dueTodayN > 0 && (
+                <HeroPill tone="warn" href="#due-today">
+                  {dueTodayN} due today
+                </HeroPill>
+              )}
             </>
           )
         }
@@ -396,7 +404,7 @@ export default async function DashboardPage() {
         <section className="2xl:col-span-5">
           <h2 className="text-sm font-semibold text-gs-black">Needs attention</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-            <StatCard icon="alert" attention label="Overdue Tasks" value={data.overdueTasks.length} tone={data.overdueTasks.length > 0 ? "danger" : "default"} />
+            <StatCard icon="alert" attention label="Overdue Tasks" value={data.overdueTasks.length} tone={data.overdueTasks.length > 0 ? "danger" : "default"} href="#overdue-tasks" />
             <StatCard icon="revision" attention label="With Revisions" value={data.revisionTasks.length} tone={data.revisionTasks.length > 0 ? "warn" : "default"} />
             <StatCard icon="clock" attention label="Hours at Risk" value={data.hoursRisk.length} tone={data.hoursRisk.length > 0 ? "warn" : "default"} />
             <StatCard icon="hourglass" attention label="Bottlenecked" value={data.bottlenecks.length} tone={data.bottlenecks.length > 0 ? "warn" : "default"} />
@@ -410,7 +418,7 @@ export default async function DashboardPage() {
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard icon="list" label="Active Tasks" value={data.activeCount} />
             <StatCard icon="check" label="Completed Tasks" value={data.completedCount} />
-            <StatCard icon="calendar" label="Due Today" value={data.dueTodayTasks.length} tone={data.dueTodayTasks.length > 0 ? "warn" : "default"} />
+            <StatCard icon="calendar" label="Due Today" value={data.dueTodayTasks.length} tone={data.dueTodayTasks.length > 0 ? "warn" : "default"} href={data.dueTodayTasks.length > 0 ? "#due-today" : undefined} />
             <StatCard icon="timer" label="Running Timers" value={data.runningTimers.length} tone={data.runningTimers.length > 0 ? "warn" : "default"} />
           </div>
         </section>
@@ -484,7 +492,7 @@ export default async function DashboardPage() {
         </SectionCard>
 
         {data.dueTodayTasks.length > 0 && (
-          <SectionCard title="Due Today" count={data.dueTodayTasks.length}>
+          <SectionCard id="due-today" title="Due Today" count={data.dueTodayTasks.length}>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[320px] text-sm">
                 <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
@@ -542,7 +550,7 @@ export default async function DashboardPage() {
           </SectionCard>
         )}
 
-        <SectionCard title="Overdue Tasks" count={data.overdueTasks.length} className="xl:col-span-2">
+        <SectionCard id="overdue-tasks" title="Overdue Tasks" count={data.overdueTasks.length} className="xl:col-span-2">
           <TaskRows tasks={data.overdueTasks} emptyText="Nothing overdue in scope." />
         </SectionCard>
 

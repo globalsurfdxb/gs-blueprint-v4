@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { runAction } from "@/lib/run-action";
+import { teamUpdate } from "@/lib/notification-scope";
 
 export async function markNotificationRead(notificationId: string, _formData: FormData) {
   return runAction(async () => {
@@ -20,13 +21,19 @@ export async function markNotificationRead(notificationId: string, _formData: Fo
   });
 }
 
-export async function markAllNotificationsRead(_formData: FormData) {
+/** Marks the unread notifications of one tab as read: "mine" (my own work) or "team" (updates about
+ * teammates' tasks). */
+export async function markAllNotificationsRead(scope: "mine" | "team", _formData: FormData) {
   return runAction(async () => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not signed in.");
 
   await prisma.notification.updateMany({
-    where: { userId: user.id, isRead: false },
+    where: {
+      userId: user.id,
+      isRead: false,
+      ...(scope === "team" ? teamUpdate(user.id) : { NOT: teamUpdate(user.id) }),
+    },
     data: { isRead: true },
   });
   revalidatePath("/notifications");
