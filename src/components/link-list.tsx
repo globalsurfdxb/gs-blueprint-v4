@@ -47,11 +47,17 @@ export function LinkList({
           const isEditing = editingId === a.id;
           return (
             <div key={a.id} className="rounded-md border border-gs-gray/15 bg-white p-4 text-sm">
-              <div className="flex items-center justify-between">
-                <a href={a.url} target="_blank" rel="noopener noreferrer" className="font-medium text-gs-red hover:underline">
+              <div className="flex items-center justify-between gap-3">
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={a.url}
+                  className="min-w-0 flex-1 truncate font-medium text-gs-red hover:underline"
+                >
                   {a.label || a.url}
                 </a>
-                <span className="text-xs text-gs-gray">
+                <span className="shrink-0 text-xs text-gs-gray">
                   {a.addedBy.name}
                   {a.isEdited && " · edited"}
                 </span>

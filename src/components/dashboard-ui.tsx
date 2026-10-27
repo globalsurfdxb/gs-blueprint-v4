@@ -66,25 +66,25 @@ export function StatCard({
   attention?: boolean;
 }) {
   const valueColor = tone === "danger" ? "text-gs-red" : tone === "warn" ? "text-amber-600" : "text-gs-black";
-  // Tone shows up as a tinted icon chip, a soft corner glow and a caption — only when the number
+  // Tone shows up as a soft tinted icon chip, a faint border and a caption — only when the number
   // needs attention, so a calm dashboard stays calm.
   const chip =
     tone === "danger"
-      ? "bg-gs-red text-white shadow-[0_4px_10px_-2px_rgba(230,62,49,0.55)]"
+      ? "bg-gs-red/10 text-gs-red"
       : tone === "warn"
-        ? "bg-amber-500 text-white shadow-[0_4px_10px_-2px_rgba(245,158,11,0.55)]"
+        ? "bg-amber-100 text-amber-600"
         : "bg-gs-light text-gs-gray";
-  const glow = tone === "danger" ? "bg-gs-red/15" : tone === "warn" ? "bg-amber-400/20" : "";
+  const edge = tone === "danger" ? "border-gs-red/25" : tone === "warn" ? "border-amber-300/50" : "border-gs-gray/10";
   const caption =
     tone === "danger" ? "Needs action" : tone === "warn" ? "Keep an eye on it" : attention ? "All clear" : null;
   const captionColor = tone === "danger" ? "text-gs-red" : tone === "warn" ? "text-amber-600" : "text-green-600";
+  const dot = tone === "danger" ? "bg-gs-red" : tone === "warn" ? "bg-amber-500" : "bg-green-500";
   const body = (
     <>
-      {glow && <span aria-hidden className={`pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full blur-2xl ${glow}`} />}
       <div className="relative flex items-start justify-between gap-2">
-        <p className="text-[13px] font-medium leading-snug text-gs-gray">{label}</p>
+        <p className="pt-0.5 text-[13px] font-medium leading-snug text-gs-gray">{label}</p>
         {icon && (
-          <span aria-hidden className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${chip}`}>
+          <span aria-hidden className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${chip}`}>
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -100,12 +100,20 @@ export function StatCard({
         )}
       </div>
       <p className={`relative mt-4 font-heading text-4xl font-bold tracking-tight tabular-nums ${valueColor}`}>{value}</p>
-      {caption && <p className={`relative mt-1 text-xs font-medium ${captionColor}`}>{caption}</p>}
+      {/* Always reserve the caption line so every tile is the same height, captioned or not. */}
+      <p className={`relative mt-1.5 flex h-4 items-center gap-1.5 text-xs font-medium ${captionColor}`}>
+        {caption && (
+          <>
+            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+            {caption}
+          </>
+        )}
+      </p>
     </>
   );
-  const cls = "relative block overflow-hidden rounded-xl border border-gs-gray/10 bg-white p-5 shadow-sm";
+  const cls = `relative block h-full overflow-hidden rounded-2xl border bg-white p-5 shadow-sm ${edge}`;
   return href ? (
-    <Link href={href} className={`${cls} transition duration-150 hover:-translate-y-0.5 hover:shadow-md`}>
+    <Link href={href} className={`${cls} transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-gs-black/5`}>
       {body}
     </Link>
   ) : (
@@ -129,8 +137,11 @@ export function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className={`scroll-mt-24 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm ${className}`}>
-      <h2 className="flex items-center gap-2 border-b border-gs-gray/10 px-4 py-3.5 text-[15px] font-semibold">
+    <section
+      id={id}
+      className={`scroll-mt-24 overflow-hidden rounded-2xl border border-gs-gray/10 bg-white shadow-sm [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-gs-light/50 ${className}`}
+    >
+      <h2 className="flex items-center gap-2.5 border-b border-gs-gray/10 px-5 py-4 font-heading text-base font-semibold tracking-tight">
         {title}
         {count !== undefined && (
           <span
@@ -142,7 +153,11 @@ export function SectionCard({
           </span>
         )}
       </h2>
-      {children}
+      {/* Long lists scroll inside the card instead of stretching the page; the table header stays pinned.
+          The wrapper owns both scroll axes, so the tables' own horizontal scroller steps aside. */}
+      <div className="max-h-[26rem] overflow-auto [&_.overflow-x-auto]:overflow-visible [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-gs-light">
+        {children}
+      </div>
     </section>
   );
 }

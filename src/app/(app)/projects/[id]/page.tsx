@@ -65,7 +65,8 @@ import { TaskGroupsSection } from "./task-groups-section";
 import { SprintsSection } from "./sprints-section";
 import { BugsSection, type BugSprintRow } from "./bugs-section";
 import { TaskViews, type ViewTask } from "@/components/task-views";
-import { countSprintTasks, sprintCountsFor } from "@/lib/sprint-dashboard";
+import { countSprintTasks, groupInScope, sprintCountsFor } from "@/lib/sprint-dashboard";
+import { getBugAccess } from "@/lib/bug-access";
 import { TaskDrawerProvider } from "@/components/task-drawer";
 import { ProjectAttachmentsSection } from "./attachments-section";
 import { ProjectStatusChip } from "@/components/status-chip";
@@ -490,7 +491,11 @@ export default async function ProjectDetailPage({
   // Bugs tab (shown only when a Bug-Tracking team the viewer can see is on this project): the project's
   // bugs grouped into bug sprints — a category (Frontend, Backend, Regression Retesting…) with a due date.
   // Bugs follow the same visibility as the task list (shownTasks), so counts always match the board.
-  const bugGroupCards = groupCards.filter((c) => c.group.pod?.bugTrackingEnabled);
+  // Bugs belong to the dev (bug-tracking) team: only people on such a team here, or who oversee it, get the tab
+  // (see getBugAccess) — an SEO or content lead attached to the project does not.
+  const bugAccess = await getBugAccess(user);
+  const bugAccessGroupIds = new Set(bugAccess.groupIds);
+  const bugGroupCards = groupCards.filter((c) => c.group.pod?.bugTrackingEnabled && bugAccessGroupIds.has(c.group.id));
   const hasBugTracking = bugGroupCards.length > 0;
   const bugGroupsAll = project.taskGroups.filter((g) => g.pod?.bugTrackingEnabled);
   const canManageBugSprintsHere = canManageBugSprints(user, project, bugGroupsAll);
@@ -584,11 +589,26 @@ export default async function ProjectDetailPage({
     badge: statusLabel(t.status, "BUG"),
   }));
 
-  // Sprints and Bugs get their own tabs, shown only when the project has the matching discipline.
+  // Sprints are for the dev team: the tab is shown to people on a Sprint-enabled team of this project, to anyone
+  // who oversees it, and to whoever has a sprint task of their own here — not to the project's other disciplines.
+  const sprintViewer =
+    sprintEnabledGroups.some(
+      (g) =>
+        groupInScope(user, {
+          leadUserId: g.leadUserId,
+          clusterId: g.clusterId,
+          podId: g.podId,
+          project: { clusterId: project.clusterId },
+        }) || canSelfCreateInGroup(user, g),
+    ) || visibleTopLevelTasks.some((t) => t.sprintId !== null);
+  const showSprintsTab = hasSprintWorkflow && sprintViewer;
+
+  // Sprints and Bugs get their own tabs, shown only when the project has the matching discipline AND the viewer
+  // is part of it.
   const activeTab =
     tabParam === "overview"
       ? "overview"
-      : tabParam === "sprints" && hasSprintWorkflow
+      : tabParam === "sprints" && showSprintsTab
         ? "sprints"
         : tabParam === "bugs" && hasBugTracking
           ? "bugs"
@@ -598,7 +618,7 @@ export default async function ProjectDetailPage({
     !!project.deadline && project.deadline < now && project.status !== "COMPLETED" && project.status !== "CANCELLED";
   const tabs: { key: string; label: string; href: string; count: number | undefined }[] = [
     { key: "tasks", label: "Tasks", href: `/projects/${project.id}`, count: taskCount },
-    ...(hasSprintWorkflow
+    ...(showSprintsTab
       ? [{ key: "sprints", label: "Sprints", href: `/projects/${project.id}?tab=sprints`, count: visibleSprintIds.size }]
       : []),
     ...(hasBugTracking
@@ -696,7 +716,7 @@ export default async function ProjectDetailPage({
             surfacePath={`/projects/${project.id}`}
             tasks={flatViewTasks}
             todayKey={todayKey}
-            sprintFilterEnabled={hasSprintWorkflow}
+            sprintFilterEnabled={showSprintsTab}
             focusSprint={focusSprint ? { id: focusSprint.id, name: focusSprint.name } : undefined}
           >
             <TaskGroupsSection

@@ -67,13 +67,7 @@ import { formatLocalDate, formatLocalTime } from "@/lib/timezone";
 import { CopyTaskLink } from "@/components/copy-task-link";
 import { PageHeader } from "@/components/page-header";
 import { Select } from "@/components/select";
-
-const PRIORITY_LABELS: Record<string, string> = {
-  LOW: "Low",
-  MEDIUM: "Medium",
-  HIGH: "High",
-  URGENT: "Urgent",
-};
+import { TaskStatusChip, PriorityPill, RevisionBadge } from "@/components/task-chips";
 
 const STATUS_LABELS: Record<string, string> = {
   NEW: "New",
@@ -83,6 +77,15 @@ const STATUS_LABELS: Record<string, string> = {
   COMPLETED: "Completed",
   ON_HOLD: "On Hold",
 };
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
+      <dt className="text-gs-gray">{label}</dt>
+      <dd className="text-right font-medium">{children}</dd>
+    </div>
+  );
+}
 
 export default async function TaskDetailPage({
   params,
@@ -183,6 +186,7 @@ export default async function TaskDetailPage({
     task.timeLogs.length > 0;
   const canDelete = canDeleteTask(user, group, task) && !taskHasActivity;
   const isBug = task.taskType === "BUG";
+  const isOverdue = !!task.dueDate && task.dueDate < new Date() && task.status !== "COMPLETED";
 
   const openTimeLog = task.timeLogs.find((t) => t.userId === user.id && t.endTime === null);
   const closedSeconds = task.timeLogs.reduce((sum, t) => sum + (t.durationSeconds ?? 0), 0);
@@ -281,14 +285,31 @@ export default async function TaskDetailPage({
       {/* Round Indicator (PRD 8.2.1 v1.22): this task's position in the handoff chain, shown
           only when there IS a chain. Kept separate from the Revision Count in the grid below —
           they measure different things (hops across groups vs. rework within one task). */}
-      {(predecessorTask || successorTask) && (
-        <div className="mt-4 flex items-center gap-2">
-          <span className="rounded-full bg-gs-black/5 px-2.5 py-0.5 text-xs font-semibold uppercase text-gs-black">
-            Round {round}
+      {/* At-a-glance strip: the four facts people open a task to check. */}
+      <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-xl border border-gs-gray/10 bg-white px-5 py-3.5 text-sm shadow-sm">
+        <TaskStatusChip status={task.status} label={statusLabel(task.status, task.taskType)} />
+        <span className="flex items-center gap-2 text-gs-gray">
+          Priority <PriorityPill priority={task.priority} />
+        </span>
+        <span className="text-gs-gray">
+          Due{" "}
+          <span className={`font-medium ${isOverdue ? "text-gs-red" : "text-gs-black"}`}>
+            {task.dueDate ? formatDate(task.dueDate) : "Not set"}
+            {isOverdue && <span className="ml-1.5 text-xs">Overdue</span>}
           </span>
-          <span className="text-xs text-gs-gray">handoff chain</span>
-        </div>
-      )}
+        </span>
+        <span className="text-gs-gray">
+          Assigned to <span className="font-medium text-gs-black">{task.assignedTo?.name ?? "Unassigned"}</span>
+        </span>
+        {(predecessorTask || successorTask) && (
+          <span className="flex items-center gap-2 sm:ml-auto">
+            <span className="rounded-full bg-gs-black/5 px-2.5 py-0.5 text-xs font-semibold uppercase text-gs-black">
+              Round {round}
+            </span>
+            <span className="text-xs text-gs-gray">handoff chain</span>
+          </span>
+        )}
+      </div>
 
       {predecessorTask && (
         <div className="mt-4 rounded-lg border border-gs-gray/15 bg-gs-light px-4 py-3 text-sm">
@@ -305,87 +326,43 @@ export default async function TaskDetailPage({
         </div>
       )}
 
-      {task.description && (
-        <p className="mt-4 text-sm text-gs-gray">{task.description}</p>
-      )}
-
-      <div className="mt-6 grid grid-cols-2 gap-4 rounded-lg border border-gs-gray/15 bg-white p-6 text-sm sm:grid-cols-3 lg:grid-cols-4">
-        <div>
-          <p className="text-gs-gray">Assigned To</p>
-          <p className="font-medium">{task.assignedTo?.name ?? "Unassigned"}</p>
-        </div>
-        <div>
-          <p className="text-gs-gray">Priority</p>
-          <p className="font-medium">{PRIORITY_LABELS[task.priority]}</p>
-        </div>
-        <div>
-          <p className="text-gs-gray">Due Date</p>
-          <p className="font-medium">{formatDate(task.dueDate)}</p>
-        </div>
-        <div>
-          <p className="text-gs-gray">Status</p>
-          <p className="font-medium">{statusLabel(task.status, task.taskType)}</p>
-        </div>
-        {isBug && (
-          <>
-            <div>
-              <p className="text-gs-gray">Severity</p>
-              <p className="font-medium">{task.severity ? SEVERITY_LABELS[task.severity] : "—"}</p>
-            </div>
-            <div>
-              <p className="text-gs-gray">Environment</p>
-              <p className="font-medium">{task.environment ? ENVIRONMENT_LABELS[task.environment] : "—"}</p>
-            </div>
-          </>
-        )}
-        <div>
-          <p className="text-gs-gray">{revisionCountLabel(task.taskType)}</p>
-          <p
-            className={`font-medium ${
-              task.revisionCount >= 2 ? "text-gs-red" : task.revisionCount === 1 ? "text-amber-600" : ""
-            }`}
-          >
-            {task.revisionCount}
-          </p>
-        </div>
-        <div>
-          <p className="text-gs-gray">Created By</p>
-          <p className="font-medium">{task.createdBy.name}</p>
-        </div>
-        {sprintEnabled && (
-          <div>
-            <p className="text-gs-gray">Sprint</p>
-            <p className="font-medium">
+      {/* Two columns on wide screens: the task's details sit in a side panel that stays in view while you scroll
+          the work (actions, time, files, comments) in the main column. On a narrow screen it is one column with
+          the details first. */}
+      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <aside className="order-first flex flex-col gap-4 xl:sticky xl:top-20 xl:order-last xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
+      <section className="rounded-xl border border-gs-gray/10 bg-white p-5 text-sm shadow-sm">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-gs-gray">Details</h2>
+        <dl className="mt-3 divide-y divide-gs-gray/10">
+          <DetailRow label="Created by">{task.createdBy.name}</DetailRow>
+          {isBug && <DetailRow label="Severity">{task.severity ? SEVERITY_LABELS[task.severity] : "—"}</DetailRow>}
+          {isBug && <DetailRow label="Environment">{task.environment ? ENVIRONMENT_LABELS[task.environment] : "—"}</DetailRow>}
+          <DetailRow label={revisionCountLabel(task.taskType)}>
+            <RevisionBadge count={task.revisionCount} />
+          </DetailRow>
+          {sprintEnabled && (
+            <DetailRow label="Sprint">
               {task.sprint ? (
                 <>
                   {task.sprint.name}
                   {task.sprint.status === "ACTIVE" && <span className="ml-1 text-green-600">· Active</span>}
                 </>
               ) : (
-                <span className="text-gs-gray">Backlog</span>
+                <span className="font-normal text-gs-gray">Backlog</span>
               )}
-            </p>
-          </div>
-        )}
-        {task.publishDate && (
-          <div>
-            <p className="text-gs-gray">Publish Date</p>
-            <p className="font-medium">{formatDate(task.publishDate)}</p>
-          </div>
-        )}
-        {task.contentType && (
-          <div>
-            <p className="text-gs-gray">Content Type</p>
-            <p className="font-medium">{task.contentType.name}</p>
-          </div>
-        )}
-      </div>
+            </DetailRow>
+          )}
+          {task.publishDate && <DetailRow label="Publish date">{formatDate(task.publishDate)}</DetailRow>}
+          {task.contentType && <DetailRow label="Content type">{task.contentType.name}</DetailRow>}
+          {totalSeconds > 0 && <DetailRow label="Time logged">{formatDuration(totalSeconds)}</DetailRow>}
+        </dl>
+      </section>
 
       {canManageSprintHere && (
         <ActionForm
           action={setTaskSprintWithId}
           successMessage="Sprint updated."
-          className="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-gs-gray/15 bg-white px-4 py-3"
+          className="flex flex-wrap items-end gap-3 rounded-xl border border-gs-gray/10 bg-white p-5 shadow-sm"
         >
           <div className="flex flex-col gap-1">
             <label htmlFor="sprintId" className="text-xs font-medium text-gs-gray">Sprint</label>
@@ -410,6 +387,15 @@ export default async function TaskDetailPage({
             Update Sprint
           </SubmitButton>
         </ActionForm>
+      )}
+      </aside>
+
+      <div className="flex min-w-0 flex-col gap-5 [&>*]:mt-0!">
+      {task.description && (
+        <section className="rounded-xl border border-gs-gray/10 bg-white p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gs-gray">Description</h2>
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-gs-black/80">{task.description}</p>
+        </section>
       )}
 
       {isBug && task.stepsToReproduce && (
@@ -638,6 +624,8 @@ export default async function TaskDetailPage({
           <p className="mt-1 text-xs text-gs-gray">Status: {statusLabel(successorTask.status, task.taskType)}</p>
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }

@@ -311,8 +311,17 @@ h1, h2, h3, h4, h5, h6 {
 }
 @keyframes slide-in-right {
   from {
+    transform: translateX(100%);
+  }
+}
+@keyframes slide-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes fade-out {
+  to {
     opacity: 0;
-    transform: translateX(28px);
   }
 }
 @keyframes pop-in {
@@ -331,7 +340,13 @@ h1, h2, h3, h4, h5, h6 {
   animation: fade-in 200ms ease-out backwards;
 }
 .anim-slide-right {
-  animation: slide-in-right 280ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  animation: slide-in-right 360ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.anim-slide-right-out {
+  animation: slide-out-right 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+.anim-fade-out {
+  animation: fade-out 220ms ease-in forwards;
 }
 .anim-pop {
   animation: pop-in 180ms ease-out backwards;

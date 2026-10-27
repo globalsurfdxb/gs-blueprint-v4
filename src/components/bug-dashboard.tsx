@@ -22,7 +22,7 @@ export function BugDashboardSection({ data }: { data: BugDashboardData }) {
   return (
     <section className="mt-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-gs-black">Bugs</h2>
+        <h2 className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-gs-gray after:h-px after:flex-1 after:bg-gs-gray/15">Bugs</h2>
         <Link href="/bugs" className="text-sm font-medium text-gs-red hover:underline">
           Open Bugs →
         </Link>

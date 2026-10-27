@@ -54,7 +54,7 @@ export default async function DependencyDashboardPage() {
       />
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-gs-black">Needs attention</h2>
+        <h2 className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-gs-gray after:h-px after:flex-1 after:bg-gs-gray/15">Needs attention</h2>
         <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             icon="alert"

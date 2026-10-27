@@ -225,7 +225,7 @@ function LeadDashboard({
       {/* KPI row — the "what needs me" glance. Each tile opens the matching filtered list in My
           Reviews rather than duplicating that list here. */}
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-gs-black">Needs attention</h2>
+        <h2 className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-gs-gray after:h-px after:flex-1 after:bg-gs-gray/15">Needs attention</h2>
         <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard icon="clock" attention label="Awaiting My Review" value={data.reviewCount} tone={data.reviewCount > 0 ? "warn" : "default"} href="/my-reviews" />
           <StatCard icon="list" attention label="Unassigned" value={data.unassignedCount} tone={data.unassignedCount > 0 ? "danger" : "default"} href="/my-reviews?view=unassigned" />
@@ -402,7 +402,7 @@ export default async function DashboardPage() {
           groups sit side by side (5 + 4 tiles) so the whole picture is one row. */}
       <div className="mt-8 grid gap-x-8 gap-y-8 2xl:grid-cols-9">
         <section className="2xl:col-span-5">
-          <h2 className="text-sm font-semibold text-gs-black">Needs attention</h2>
+          <h2 className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-gs-gray after:h-px after:flex-1 after:bg-gs-gray/15">Needs attention</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
             <StatCard icon="alert" attention label="Overdue Tasks" value={data.overdueTasks.length} tone={data.overdueTasks.length > 0 ? "danger" : "default"} href="#overdue-tasks" />
             <StatCard icon="revision" attention label="With Revisions" value={data.revisionTasks.length} tone={data.revisionTasks.length > 0 ? "warn" : "default"} />
@@ -414,7 +414,7 @@ export default async function DashboardPage() {
 
         {/* Activity summary widgets (PRD 8.8) — scoped identically to the KPIs beside them. */}
         <section className="2xl:col-span-4">
-          <h2 className="text-sm font-semibold text-gs-black">Activity</h2>
+          <h2 className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-gs-gray after:h-px after:flex-1 after:bg-gs-gray/15">Activity</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard icon="list" label="Active Tasks" value={data.activeCount} />
             <StatCard icon="check" label="Completed Tasks" value={data.completedCount} />
