@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { canSearch } from "@/lib/permissions";
 import { getSearchFilterOptions, runSearch, SORT_OPTIONS, type SearchParams } from "@/lib/search";
 import { statusLabel, SEVERITY_LABELS, SEVERITY_VALUES } from "@/lib/bug";
 import { PageHeader } from "@/components/page-header";
@@ -27,7 +26,6 @@ export default async function SearchPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (!canSearch(user)) redirect("/");
 
   const sp = await searchParams;
   const params: SearchParams = {

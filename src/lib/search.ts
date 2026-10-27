@@ -2,7 +2,8 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import type { CurrentUser } from "@/lib/auth";
-import { getReportScope } from "@/lib/reports";
+import { getReportScope, type ReportScope } from "@/lib/reports";
+import { canSearch } from "@/lib/permissions";
 import type { Prisma, TaskStatus } from "@/generated/prisma/client";
 
 // Search & Filters (PRD 8.10): free-text across project and task names, plus filters by
@@ -25,6 +26,21 @@ export type SearchParams = {
   severity?: string; // "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" — only meaningful with taskType=BUG
   sprint?: string; // "active" | "backlog" | a specific sprintId — PRD 8.14, Sprint-enabled scope only
 };
+
+/**
+ * What a viewer's search may reach. Oversight roles (Admin / Cluster Head / Account-Client Services) and Leads use
+ * the same scope as Reports. Everyone else — Contributors — can only find work they are assigned or created, the
+ * same set My Tasks shows, so the header search never reveals another person's work.
+ */
+function searchScope(user: CurrentUser): ReportScope {
+  if (canSearch(user) || user.roles.some((r) => r.role === "LEAD")) return getReportScope(user);
+  const mine: Prisma.TaskWhereInput = { OR: [{ assignedToId: user.id }, { createdById: user.id }] };
+  return {
+    label: "Your tasks",
+    taskWhere: { AND: [mine, { project: { archivedAt: null } }] },
+    projectWhere: { AND: [{ tasks: { some: mine } }, { archivedAt: null }] },
+  };
+}
 
 export const SORT_OPTIONS = [
   { value: "due", label: "Due Date" },
@@ -69,7 +85,7 @@ const STATUS_VALUES: TaskStatus[] = ["NEW", "IN_PROGRESS", "REVIEW", "REVISION",
 /** Dropdown option lists, each already narrowed to the viewer's scope so a filter can never
  * surface a client/project/person outside what their results could contain. */
 export async function getSearchFilterOptions(user: CurrentUser): Promise<SearchFilterOptions> {
-  const { projectWhere, taskWhere } = getReportScope(user);
+  const { projectWhere, taskWhere } = searchScope(user);
 
   const projects = await prisma.project.findMany({
     where: projectWhere,
@@ -113,7 +129,7 @@ export async function getSearchFilterOptions(user: CurrentUser): Promise<SearchF
 }
 
 export async function runSearch(user: CurrentUser, params: SearchParams): Promise<SearchResult[]> {
-  const { taskWhere } = getReportScope(user);
+  const { taskWhere } = searchScope(user);
   const and: Prisma.TaskWhereInput[] = [taskWhere];
 
   const q = params.q?.trim();

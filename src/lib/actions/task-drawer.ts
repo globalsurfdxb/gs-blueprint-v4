@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { canViewTask, canAssignTaskToSprint, canEditTaskAttributes, isAdmin } from "@/lib/permissions";
+import { canViewTask, canAssignTaskToSprint, canEditTaskAttributes, canLogTime, isAdmin } from "@/lib/permissions";
 import { resolveTaskAssigneeContext } from "@/lib/task-assignment";
 import { getTaskRound } from "@/lib/task-chain";
 import { formatDate } from "@/lib/format";
@@ -56,6 +56,13 @@ export type TaskDrawerData = {
   sprints: { id: string; name: string; status: string }[];
   // Priority / Severity editing
   canEditAttributes: boolean;
+  // Timer (the assignee's own, same rule as the full task page)
+  canTrackTime: boolean;
+  timerRunning: boolean;
+  /** ISO start of the viewer's open time log on this task, if running. */
+  timerSinceIso: string | null;
+  /** Seconds already logged across all closed entries. */
+  loggedSeconds: number;
   // Comments
   comments: DrawerComment[];
   canDeleteComment: boolean;
@@ -130,6 +137,13 @@ async function loadTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
 
   const round = await getTaskRound(task);
 
+  const timeLogs = await prisma.timeLog.findMany({
+    where: { taskId: task.id },
+    select: { userId: true, startTime: true, endTime: true, durationSeconds: true },
+  });
+  const openLog = timeLogs.find((l) => l.userId === user.id && l.endTime === null);
+  const loggedSeconds = timeLogs.reduce((sum, l) => sum + (l.durationSeconds ?? 0), 0);
+
   return {
     id: task.id,
     projectId: task.projectId,
@@ -158,6 +172,10 @@ async function loadTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
     sprintId: task.sprintId,
     sprints,
     canEditAttributes: canEditTaskAttributes(user, project, group),
+    canTrackTime: canLogTime(user, task) && (task.status === "IN_PROGRESS" || !!openLog),
+    timerRunning: !!openLog,
+    timerSinceIso: openLog ? openLog.startTime.toISOString() : null,
+    loggedSeconds,
     comments: task.comments.map((c) => ({
       id: c.id,
       text: c.text,

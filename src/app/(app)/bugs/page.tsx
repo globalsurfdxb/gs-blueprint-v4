@@ -375,7 +375,13 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {summary.map((s) => (
-          <div key={s.label} className="rounded-xl border border-gs-gray/10 bg-white px-4 py-3 shadow-sm">
+          <div key={s.label} className="relative overflow-hidden rounded-xl border border-gs-gray/10 bg-white px-4 py-3.5 shadow-sm">
+            <span
+              aria-hidden
+              className={`absolute inset-y-0 left-0 w-1 ${
+                s.tone.includes("red") ? "bg-gs-red" : s.tone.includes("violet") ? "bg-violet-500" : "bg-gs-gray/25"
+              }`}
+            />
             <p className="text-xs font-medium text-gs-gray">{s.label}</p>
             <p className={`mt-1 font-heading text-2xl font-bold tabular-nums ${s.tone}`}>{s.n}</p>
           </div>
@@ -383,23 +389,48 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
       </div>
 
       {/* Filter bar — applies as you change it (search waits for a short pause). */}
-      <AutoFilterForm className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-gs-gray/10 bg-white p-3 shadow-sm">
-        <div className="flex w-full flex-col gap-1 sm:w-64">
-          <label htmlFor="q" className="text-xs font-medium text-gs-gray">Search</label>
-          <input
-            id="q"
-            name="q"
-            type="search"
-            defaultValue={q}
-            placeholder="Bug, project, sprint or person…"
-            autoComplete="off"
-            className="field field-sm w-full"
-          />
+      <AutoFilterForm className="mt-4 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="relative w-full sm:w-80">
+            <svg
+              aria-hidden
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gs-gray"
+            >
+              <circle cx="9" cy="9" r="5.5" />
+              <path d="m13.5 13.5 3.5 3.5" />
+            </svg>
+            <label htmlFor="q" className="sr-only">Search</label>
+            <input
+              id="q"
+              name="q"
+              type="search"
+              defaultValue={q}
+              placeholder="Bug, project, sprint or person…"
+              autoComplete="off"
+              className="field field-sm w-full pl-9"
+            />
+          </div>
+        <div className="flex items-center gap-3 text-sm text-gs-gray">
+          <span>
+            {filtered.length} of {all.length} {all.length === 1 ? "bug" : "bugs"}
+          </span>
+          {anyFilter && (
+            <Link href="/bugs" className="font-medium text-gs-red hover:underline">
+              Clear filters
+            </Link>
+          )}
+        </div>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="show" className="text-xs font-medium text-gs-gray">Show</label>
-          <Select id="show" name="show" defaultValue={show} className="field field-sm min-w-44">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-gs-gray/10 bg-gs-light/40 px-4 py-3.5 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="show" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Show</label>
+          <Select id="show" name="show" defaultValue={show} className="field field-sm w-full">
             <option value="all">Bugs &amp; bug sprints</option>
             <option value="bugs">Bugs only</option>
             <option value="sprints">Bug sprints only</option>
@@ -407,9 +438,9 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
         </div>
 
         {projectOptions.length > 1 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="project" className="text-xs font-medium text-gs-gray">Project</label>
-            <Select id="project" name="project" defaultValue={project} className="field field-sm min-w-48">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="project" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Project</label>
+            <Select id="project" name="project" defaultValue={project} className="field field-sm w-full">
               <option value="">All projects</option>
               {projectOptions.map(([id, label]) => (
                 <option key={id} value={id}>{label}</option>
@@ -418,9 +449,9 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
           </div>
         )}
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="status" className="text-xs font-medium text-gs-gray">Status</label>
-          <Select id="status" name="status" defaultValue={status} className="field field-sm min-w-44">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="status" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Status</label>
+          <Select id="status" name="status" defaultValue={status} className="field field-sm w-full">
             <option value="open">Still open (not closed)</option>
             <option value="all">All, including closed</option>
             <option value="NEW">Open</option>
@@ -431,9 +462,9 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="severity" className="text-xs font-medium text-gs-gray">Severity</label>
-          <Select id="severity" name="severity" defaultValue={severity} className="field field-sm min-w-36">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="severity" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Severity</label>
+          <Select id="severity" name="severity" defaultValue={severity} className="field field-sm w-full">
             <option value="">Any severity</option>
             {SEVERITY_ORDER.map((s) => (
               <option key={s} value={s}>{SEVERITY_LABELS[s]}</option>
@@ -442,9 +473,9 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
         </div>
 
         {(assigneeOptions.length > 0 || hasUnassigned) && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="assignee" className="text-xs font-medium text-gs-gray">Assignee</label>
-            <Select id="assignee" name="assignee" defaultValue={assignee} className="field field-sm min-w-40">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="assignee" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Assignee</label>
+            <Select id="assignee" name="assignee" defaultValue={assignee} className="field field-sm w-full">
               <option value="">Everyone</option>
               {hasUnassigned && <option value="none">Unassigned</option>}
               {assigneeOptions.map(([id, name]) => (
@@ -455,9 +486,9 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
         )}
 
         {bugSprintOptions.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="bugSprint" className="text-xs font-medium text-gs-gray">Bug sprint</label>
-            <Select id="bugSprint" name="bugSprint" defaultValue={bugSprintFilter} className="field field-sm min-w-44">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="bugSprint" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Bug sprint</label>
+            <Select id="bugSprint" name="bugSprint" defaultValue={bugSprintFilter} className="field field-sm w-full">
               <option value="">Any bug sprint</option>
               {hasNoBugSprint && <option value="none">Not in a bug sprint</option>}
               {bugSprintOptions.map(([id, label]) => (
@@ -467,20 +498,10 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
           </div>
         )}
 
-        <label className="flex min-h-9 items-center gap-2 pb-0.5 text-sm text-gs-gray">
+        <label className="flex min-h-9 items-center gap-2 self-end text-sm text-gs-gray">
           <input type="checkbox" name="reopened" value="1" defaultChecked={reopened} className="h-4 w-4" />
           Reopened at least once
         </label>
-
-        <div className="flex min-h-9 items-center gap-3 pb-0.5 text-sm text-gs-gray sm:ml-auto">
-          <span>
-            {filtered.length} of {all.length} {all.length === 1 ? "bug" : "bugs"}
-          </span>
-          {anyFilter && (
-            <Link href="/bugs" className="font-medium text-gs-red hover:underline">
-              Clear filters
-            </Link>
-          )}
         </div>
       </AutoFilterForm>
 
@@ -529,7 +550,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                   ) : (
                   <div className="table-scroll">
                     <table className="w-full min-w-[860px] text-sm">
-                      <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
+                      <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
                         <tr>
                           <th className="whitespace-nowrap px-4 py-2">Bug</th>
                           <th className="whitespace-nowrap px-4 py-2">Severity</th>
@@ -549,7 +570,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                               : daysOverdue(b.dueDate, b.assignedTo?.location ?? FALLBACK_LOCATION, now);
                           return (
                             <TaskRow key={b.id} taskId={b.id} projectId={b.projectId} className="border-t border-gs-gray/10">
-                              <td className="px-4 py-2.5">
+                              <td className="px-4 py-3">
                                 <TaskOpener
                                   taskId={b.id}
                                   projectId={b.projectId}
@@ -561,7 +582,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                                   <p className="text-xs text-gs-gray">{ENVIRONMENT_LABELS[b.environment] ?? b.environment}</p>
                                 )}
                               </td>
-                              <td className="whitespace-nowrap px-4 py-2.5">
+                              <td className="whitespace-nowrap px-4 py-3">
                                 {b.severity ? (
                                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${SEVERITY_CHIP[b.severity] ?? ""}`}>
                                     {SEVERITY_LABELS[b.severity] ?? b.severity}
@@ -570,7 +591,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                                   <span className="text-gs-gray">—</span>
                                 )}
                               </td>
-                              <td className="whitespace-nowrap px-4 py-2.5">
+                              <td className="whitespace-nowrap px-4 py-3">
                                 {b.bugSprint ? (
                                   <Link
                                     href={`/projects/${b.projectId}?tab=bugs`}
@@ -584,18 +605,18 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                                   <span className="text-gs-gray">—</span>
                                 )}
                               </td>
-                              <td className="whitespace-nowrap px-4 py-2.5">
+                              <td className="whitespace-nowrap px-4 py-3">
                                 <TaskStatusChip status={b.status} label={statusLabel(b.status, "BUG")} />
                               </td>
-                              <td className="whitespace-nowrap px-4 py-2.5">
+                              <td className="whitespace-nowrap px-4 py-3">
                                 {b.assignedTo ? (
                                   <span className="text-gs-gray">{b.assignedTo.name}</span>
                                 ) : (
                                   <span className="font-medium text-gs-red">Unassigned</span>
                                 )}
                               </td>
-                              <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{b.createdBy.name}</td>
-                              <td className="whitespace-nowrap px-4 py-2.5">
+                              <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{b.createdBy.name}</td>
+                              <td className="whitespace-nowrap px-4 py-3">
                                 <span
                                   className={
                                     b.revisionCount >= 2
@@ -608,7 +629,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                                   {b.revisionCount}
                                 </span>
                               </td>
-                              <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">
+                              <td className="whitespace-nowrap px-4 py-3 text-gs-gray">
                                 {formatDate(b.dueDate)}
                                 {late !== null && late > 0 && <span className="ml-1 text-gs-red">({late}d late)</span>}
                               </td>

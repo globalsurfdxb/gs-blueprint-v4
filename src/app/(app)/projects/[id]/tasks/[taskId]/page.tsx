@@ -67,6 +67,7 @@ import { formatLocalDate, formatLocalTime } from "@/lib/timezone";
 import { CopyTaskLink } from "@/components/copy-task-link";
 import { PageHeader } from "@/components/page-header";
 import { Select } from "@/components/select";
+import { TaskTabs } from "./task-tabs";
 import { TaskStatusChip, PriorityPill, RevisionBadge } from "@/components/task-chips";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -414,24 +415,6 @@ export default async function TaskDetailPage({
         />
       )}
 
-      {isBug && task.statusEvents.length > 0 && (
-        <div className="mt-4 rounded-lg border border-gs-gray/15 bg-white px-4 py-3 text-sm">
-          <p className="text-xs uppercase text-gs-gray">Status History</p>
-          <ol className="mt-2 flex flex-col gap-1.5">
-            {task.statusEvents.map((e) => (
-              <li key={e.id} className="flex flex-wrap items-baseline gap-x-2">
-                <span className="font-medium">{statusLabel(e.status, "BUG")}</span>
-                <span className="text-gs-gray">
-                  {formatLocalDate(e.createdAt, user.location)} {formatLocalTime(e.createdAt, user.location)}
-                  {" · "}
-                  {e.changedBy.name}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-
       {task.monthlyBrief && (
         <div className="mt-4 rounded-lg border border-gs-gray/15 bg-gs-light px-4 py-3 text-sm">
           <p className="text-xs uppercase text-gs-gray">
@@ -485,36 +468,15 @@ export default async function TaskDetailPage({
         )
       )}
 
-      {canSeeTimeLogDetail && task.timeLogs.length > 0 && (
-        <TimeLogEntries
-          logs={task.timeLogs}
-          location={task.assignedTo?.location ?? "DUBAI"}
-          canEdit={canEditTimeLog(user, project, group)}
-          editAction={editTimeLog.bind(null, project.id, task.id)}
-        />
-      )}
-
-      {/* ── The work: references (OneDrive), then the copy (Content Body), then the
-             discussion (Comments) — deliverable sits directly above the thread about it. ── */}
-      <AttachmentsSection
-        attachments={task.attachments}
-        currentUserId={user.id}
-        canDelete={isAdmin(user)}
-        addAction={addAttachment.bind(null, project.id, task.id)}
-        editAction={editAttachment.bind(null, project.id, task.id)}
-        deleteAction={deleteAttachment.bind(null, project.id, task.id)}
-      />
-
-      {/* Content Body (PRD 8.12) — only on Content-discipline tasks; the assignee edits, others
-          read. Additive: the OneDrive links above stay for briefs/references, not the copy. */}
-      {group?.pod?.contentBodyEnabled && (
-        <ContentBodySection
-          html={task.contentBody}
-          canManage={canEditContentBody(user, task)}
-          action={updateContentBody.bind(null, project.id, task.id)}
-        />
-      )}
-
+      {/* ── Work area: one tab per kind of work, Zoho-style ── */}
+      <TaskTabs
+        tabs={[
+          {
+            key: "comments",
+            label: "Comments",
+            count: task.comments.length,
+            content: (
+              <>
       <CommentsSection
         comments={task.comments}
         currentUserId={user.id}
@@ -525,6 +487,17 @@ export default async function TaskDetailPage({
         deleteAction={deleteComment.bind(null, project.id, task.id)}
       />
 
+              </>
+            ),
+          },
+          ...(task.subtasks.length > 0 || (canAddSubtask && !task.parentTaskId)
+            ? [
+                {
+                  key: "subtasks",
+                  label: "Subtasks",
+                  count: task.subtasks.length,
+                  content: (
+                    <>
       {/* No empty-state sentence (QA D-01): the section only appears when there is something to
           show or the viewer can add a subtask. */}
       {(task.subtasks.length > 0 || (canAddSubtask && !task.parentTaskId)) && (
@@ -555,6 +528,109 @@ export default async function TaskDetailPage({
           )}
         </div>
       )}
+
+                    </>
+                  ),
+                },
+              ]
+            : []),
+          ...(canSeeTimeLogDetail && task.timeLogs.length > 0
+            ? [
+                {
+                  key: "time",
+                  label: "Time log",
+                  count: task.timeLogs.length,
+                  content: (
+                    <>
+      {canSeeTimeLogDetail && task.timeLogs.length > 0 && (
+        <TimeLogEntries
+          logs={task.timeLogs}
+          location={task.assignedTo?.location ?? "DUBAI"}
+          canEdit={canEditTimeLog(user, project, group)}
+          editAction={editTimeLog.bind(null, project.id, task.id)}
+        />
+      )}
+
+                    </>
+                  ),
+                },
+              ]
+            : []),
+          {
+            key: "links",
+            label: "Links",
+            count: task.attachments.length,
+            content: (
+              <>
+      {/* ── The work: references (OneDrive), then the copy (Content Body), then the
+             discussion (Comments) — deliverable sits directly above the thread about it. ── */}
+      <AttachmentsSection
+        attachments={task.attachments}
+        currentUserId={user.id}
+        canDelete={isAdmin(user)}
+        addAction={addAttachment.bind(null, project.id, task.id)}
+        editAction={editAttachment.bind(null, project.id, task.id)}
+        deleteAction={deleteAttachment.bind(null, project.id, task.id)}
+      />
+
+              </>
+            ),
+          },
+          ...(group?.pod?.contentBodyEnabled
+            ? [
+                {
+                  key: "content",
+                  label: "Content",
+                  content: (
+                    <>
+      {/* Content Body (PRD 8.12) — only on Content-discipline tasks; the assignee edits, others
+          read. Additive: the OneDrive links above stay for briefs/references, not the copy. */}
+      {group?.pod?.contentBodyEnabled && (
+        <ContentBodySection
+          html={task.contentBody}
+          canManage={canEditContentBody(user, task)}
+          action={updateContentBody.bind(null, project.id, task.id)}
+        />
+      )}
+
+                    </>
+                  ),
+                },
+              ]
+            : []),
+          ...(isBug && task.statusEvents.length > 0
+            ? [
+                {
+                  key: "history",
+                  label: "History",
+                  count: task.statusEvents.length,
+                  content: (
+                    <>
+      {isBug && task.statusEvents.length > 0 && (
+        <div className="mt-4 rounded-lg border border-gs-gray/15 bg-white px-4 py-3 text-sm">
+          <p className="text-xs uppercase text-gs-gray">Status History</p>
+          <ol className="mt-2 flex flex-col gap-1.5">
+            {task.statusEvents.map((e) => (
+              <li key={e.id} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-medium">{statusLabel(e.status, "BUG")}</span>
+                <span className="text-gs-gray">
+                  {formatLocalDate(e.createdAt, user.location)} {formatLocalTime(e.createdAt, user.location)}
+                  {" · "}
+                  {e.changedBy.name}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+                    </>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+      />
 
       {/* ── Route onward: hand off / reject & return / calendar sign-off, then the Successor
              summary. Kept at the bottom so the chain reads top-to-bottom (Predecessor above,

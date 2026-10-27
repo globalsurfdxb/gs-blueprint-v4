@@ -11,7 +11,6 @@ import {
   hasLoggedTime,
   logBugStatusEvent,
   revalidateTaskSurfaces,
-  startTimerFor,
   stopOpenTimers,
 } from "@/lib/task-activity";
 
@@ -52,22 +51,12 @@ async function startTaskCore(taskId: string): Promise<Done> {
   if (!canAdvanceTask(user, task)) throw new Error("Only the person this task is assigned to can start it.");
   if (task.status !== "NEW") throw new Error("This task has already been started.");
 
-  // Starting a task IS starting work: the assignee's timer starts with it, so status and activity
-  // can't drift apart (QA F-06). A timer running on another task is stopped — and named — so it
-  // never stops silently (QA D-08).
-  let notice: string | undefined;
-  if (user.id === task.assignedToId) {
-    const { stopped } = await startTimerFor(user, task);
-    if (stopped) {
-      notice = `Timer stopped for: ${stopped.name}`;
-      revalidatePath(`/projects/${stopped.projectId}/tasks/${stopped.id}`);
-    }
-  }
-
+  // Moving to In Progress only changes the status. The timer is the assignee's own choice: they start it
+  // from the task page when they actually begin (it is still required before submitting for review).
   await prisma.task.update({ where: { id: taskId }, data: { status: "IN_PROGRESS" } });
   await logBugStatusEvent(task, "IN_PROGRESS", user.id);
   revalidateTaskSurfaces(project.id, taskId);
-  return { ok: true, notice };
+  return { ok: true };
 }
 
 async function submitForReviewCore(taskId: string): Promise<Done> {

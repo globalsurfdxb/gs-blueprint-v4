@@ -48,7 +48,6 @@ export function computeStatusOptions(args: {
     options.push({
       value: "IN_PROGRESS",
       label: label("IN_PROGRESS"),
-      hint: isAssignee ? "Starts your timer" : undefined,
     });
   }
   if (task.status === "IN_PROGRESS" && canAdvance) {

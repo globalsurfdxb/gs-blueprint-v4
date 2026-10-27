@@ -11,6 +11,9 @@ import { reassignTask } from "@/lib/actions/tasks";
 import { setTaskSprint } from "@/lib/actions/sprints";
 import { setTaskPriority, setTaskSeverity } from "@/lib/actions/task-attributes";
 import { addComment } from "@/lib/actions/comments";
+import { startTimer, stopTimer } from "@/lib/actions/time-tracking";
+import { LiveElapsed } from "@/components/live-elapsed";
+import { formatDuration } from "@/lib/format";
 import { getCreatableProjects, getTaskCreateOptions, type TaskCreateOptions } from "@/lib/actions/task-create";
 import { CreateTaskPanel } from "@/components/create-task-panel";
 import { formatLocalDate, formatLocalTime } from "@/lib/timezone";
@@ -51,13 +54,13 @@ function fd(entries: Record<string, string>): FormData {
   return f;
 }
 
-const selectClass = "field field-sm w-full";
+const selectClass = "field field-sm w-full border-transparent! bg-transparent! font-medium hover:border-gs-gray/30! hover:bg-white!";
 
-function Field({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className={`flex min-w-0 flex-col gap-1.5 ${wide ? "col-span-2" : ""}`}>
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">{label}</span>
-      {children}
+    <label className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-3 py-2.5">
+      <span className="pt-2 text-[13px] text-gs-gray">{label}</span>
+      <div className="flex min-w-0 flex-col gap-1.5">{children}</div>
     </label>
   );
 }
@@ -315,7 +318,47 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                 </div>
 
                 <div className={`flex-1 overflow-y-auto px-6 py-5 transition-opacity ${pending || loading ? "opacity-60" : ""}`}>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+                  {data.canTrackTime && (
+                    <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-gs-gray/15 bg-gs-light/70 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Time tracked</p>
+                        <p className="mt-0.5 font-heading text-xl font-semibold tabular-nums">
+                          {formatDuration(data.loggedSeconds)}
+                        </p>
+                        {data.timerRunning && data.timerSinceIso && (
+                          <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-gs-red">
+                            <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-gs-red" />
+                            Running · <LiveElapsed startedAtIso={data.timerSinceIso} />
+                          </p>
+                        )}
+                      </div>
+                      {data.timerRunning ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() =>
+                            runEdit(() => stopTimer(data.projectId, data.id, fd({})), () => addToast("Timer stopped.", "success"))
+                          }
+                          className="btn btn-danger btn-sm shrink-0"
+                        >
+                          ■ Stop timer
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() =>
+                            runEdit(() => startTimer(data.projectId, data.id, fd({})), () => addToast("Timer started.", "success"))
+                          }
+                          className="btn btn-primary btn-sm shrink-0"
+                        >
+                          ▶ Start timer
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="divide-y divide-gs-gray/10">
                 <Field label="Status">
                   {data.statusOptions.length > 1 ? (
                     <Select
@@ -339,12 +382,12 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                   ) : (
                     // Nothing this user may change it to — show the status instead of a dropdown
                     // full of moves that would only be refused (QA B-02, E-01).
-                    <p className="text-sm">{data.statusLabel}</p>
+                    <p className="px-2.5 py-2 text-sm font-medium">{data.statusLabel}</p>
                   )}
                 </Field>
 
                 {data.canReassign && (
-                  <Field wide label={data.reassignBugMode ? "Assignee (hand bug to)" : "Assignee"}>
+                  <Field label={data.reassignBugMode ? "Assignee (hand bug to)" : "Assignee"}>
                     <Select
                       className={selectClass}
                       disabled={pending}
@@ -366,8 +409,8 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                   </Field>
                 )}
                 {!data.canReassign && (
-                  <Field wide label="Assignee">
-                    <p className="text-sm">{data.assignedToName ?? "Unassigned"}</p>
+                  <Field label="Assignee">
+                    <p className="px-2.5 py-2 text-sm font-medium">{data.assignedToName ?? "Unassigned"}</p>
                   </Field>
                 )}
 
@@ -384,7 +427,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                       ))}
                     </Select>
                   ) : (
-                    <p className="text-sm">{PRIORITY_LABELS[data.priority] ?? data.priority}</p>
+                    <p className="px-2.5 py-2 text-sm font-medium">{PRIORITY_LABELS[data.priority] ?? data.priority}</p>
                   )}
                 </Field>
 
@@ -403,13 +446,13 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                         ))}
                       </Select>
                     ) : (
-                      <p className="text-sm">{data.severity ? SEVERITY_LABELS[data.severity] : "—"}</p>
+                      <p className="px-2.5 py-2 text-sm font-medium">{data.severity ? SEVERITY_LABELS[data.severity] : "—"}</p>
                     )}
                   </Field>
                 )}
 
                 {data.canManageSprint && (
-                  <Field wide label="Sprint">
+                  <Field label="Sprint">
                     <Select
                       className={selectClass}
                       disabled={pending}

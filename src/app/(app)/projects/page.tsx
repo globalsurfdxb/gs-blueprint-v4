@@ -167,25 +167,49 @@ export default async function ProjectsPage({
         }
       />
 
-      <AutoFilterForm className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border border-gs-gray/10 bg-white p-3 shadow-sm">
+      <AutoFilterForm className="mt-6 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
         {showArchived && <input type="hidden" name="archived" value="1" />}
-
-        <div className="flex w-full flex-col gap-1 sm:w-72">
-          <label htmlFor="q" className="text-xs font-medium text-gs-gray">Search</label>
-          <input
-            id="q"
-            name="q"
-            type="search"
-            defaultValue={q}
-            placeholder="Name, client or reference…"
-            autoComplete="off"
-            className="field field-sm w-full"
-          />
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="relative w-full sm:w-80">
+            <svg
+              aria-hidden
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gs-gray"
+            >
+              <circle cx="9" cy="9" r="5.5" />
+              <path d="m13.5 13.5 3.5 3.5" />
+            </svg>
+            <label htmlFor="q" className="sr-only">Search</label>
+            <input
+              id="q"
+              name="q"
+              type="search"
+              defaultValue={q}
+              placeholder="Search name, client or reference…"
+              autoComplete="off"
+              className="field field-sm w-full pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-3 text-sm text-gs-gray">
+            <span>
+              {filtered.length} of {projects.length} {projects.length === 1 ? "project" : "projects"}
+            </span>
+            {filtersActive && (
+              <Link href={clearHref} className="font-medium text-gs-red hover:underline">
+                Clear filters
+              </Link>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="status" className="text-xs font-medium text-gs-gray">Status</label>
-          <Select id="status" name="status" defaultValue={statusFilter ?? ""} className="field field-sm min-w-40">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-gs-gray/10 bg-gs-light/40 px-4 py-3.5 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="status" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Status</label>
+          <Select id="status" name="status" defaultValue={statusFilter ?? ""} className="field field-sm w-full">
             <option value="">All statuses ({projects.length})</option>
             {presentStatuses.map((st) => (
               <option key={st} value={st}>
@@ -196,9 +220,9 @@ export default async function ProjectsPage({
         </div>
 
         {clientOptions.length > 1 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="client" className="text-xs font-medium text-gs-gray">Client</label>
-            <Select id="client" name="client" defaultValue={clientFilter} className="field field-sm min-w-44">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="client" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Client</label>
+            <Select id="client" name="client" defaultValue={clientFilter} className="field field-sm w-full">
               <option value="">All clients</option>
               {clientOptions.map(([id, name]) => (
                 <option key={id} value={id}>{name}</option>
@@ -208,9 +232,9 @@ export default async function ProjectsPage({
         )}
 
         {serviceOptions.length > 1 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="service" className="text-xs font-medium text-gs-gray">Service type</label>
-            <Select id="service" name="service" defaultValue={serviceFilter} className="field field-sm min-w-40">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="service" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Service type</label>
+            <Select id="service" name="service" defaultValue={serviceFilter} className="field field-sm w-full">
               <option value="">All services</option>
               {serviceOptions.map(([id, name]) => (
                 <option key={id} value={id}>{name}</option>
@@ -220,9 +244,9 @@ export default async function ProjectsPage({
         )}
 
         {clusterOptions.length > 1 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="cluster" className="text-xs font-medium text-gs-gray">Cluster</label>
-            <Select id="cluster" name="cluster" defaultValue={clusterFilter} className="field field-sm min-w-44">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="cluster" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Cluster</label>
+            <Select id="cluster" name="cluster" defaultValue={clusterFilter} className="field field-sm w-full">
               <option value="">All clusters</option>
               {clusterOptions.map(([id, name]) => (
                 <option key={id} value={id}>{name}</option>
@@ -231,9 +255,9 @@ export default async function ProjectsPage({
           </div>
         )}
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="deadline" className="text-xs font-medium text-gs-gray">Deadline</label>
-          <Select id="deadline" name="deadline" defaultValue={deadlineFilter} className="field field-sm min-w-40">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="deadline" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Deadline</label>
+          <Select id="deadline" name="deadline" defaultValue={deadlineFilter} className="field field-sm w-full">
             <option value="">Any deadline</option>
             {DEADLINE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -241,27 +265,19 @@ export default async function ProjectsPage({
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="sort" className="text-xs font-medium text-gs-gray">Sort by</label>
-          <Select id="sort" name="sort" defaultValue={sort} className="field field-sm min-w-40">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="sort" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Sort by</label>
+          <Select id="sort" name="sort" defaultValue={sort} className="field field-sm w-full">
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </Select>
         </div>
 
-        {filtersActive && (
-          <Link href={clearHref} className="mb-1.5 text-sm font-medium text-gs-red hover:underline">
-            Clear filters
-          </Link>
-        )}
+        </div>
       </AutoFilterForm>
 
-      <p className="mt-4 text-xs text-gs-gray">
-        Showing {filtered.length} of {projects.length} {projects.length === 1 ? "project" : "projects"}
-      </p>
-
-      <div className="mt-2 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+      <div className="mt-4 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead className="border-b border-gs-gray/10 bg-gs-light/70 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">

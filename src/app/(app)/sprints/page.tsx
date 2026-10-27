@@ -97,24 +97,49 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
       <NewSprintPanel projects={manageableProjects} />
 
       {/* Filter bar — applies as you change it (search waits for a short pause). */}
-      <AutoFilterForm className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-gs-gray/10 bg-white p-3 shadow-sm">
-        <div className="flex w-full flex-col gap-1 sm:w-64">
-          <label htmlFor="q" className="text-xs font-medium text-gs-gray">Search</label>
-          <input
-            id="q"
-            name="q"
-            type="search"
-            defaultValue={q}
-            placeholder="Sprint, project or client…"
-            autoComplete="off"
-            className="field field-sm w-full"
-          />
+      <AutoFilterForm className="mt-4 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="relative w-full sm:w-80">
+            <svg
+              aria-hidden
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gs-gray"
+            >
+              <circle cx="9" cy="9" r="5.5" />
+              <path d="m13.5 13.5 3.5 3.5" />
+            </svg>
+            <label htmlFor="q" className="sr-only">Search</label>
+            <input
+              id="q"
+              name="q"
+              type="search"
+              defaultValue={q}
+              placeholder="Sprint, project or client…"
+              autoComplete="off"
+              className="field field-sm w-full pl-9"
+            />
+          </div>
+        <div className="flex items-center gap-3 text-sm text-gs-gray">
+          <span>
+            {filtered.length} of {all.length} {all.length === 1 ? "sprint" : "sprints"}
+          </span>
+          {anyFilter && (
+            <Link href="/sprints" className="font-medium text-gs-red hover:underline">
+              Clear filters
+            </Link>
+          )}
+        </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-gs-gray/10 bg-gs-light/40 px-4 py-3.5 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
         {projects.length > 1 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="project" className="text-xs font-medium text-gs-gray">Project</label>
-            <Select id="project" name="project" defaultValue={project} className="field field-sm min-w-48">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="project" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Project</label>
+            <Select id="project" name="project" defaultValue={project} className="field field-sm w-full">
               <option value="">All projects</option>
               {projects.map(([id, label]) => (
                 <option key={id} value={id}>{label}</option>
@@ -124,9 +149,9 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
         )}
 
         {clients.length > 1 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="client" className="text-xs font-medium text-gs-gray">Client</label>
-            <Select id="client" name="client" defaultValue={client} className="field field-sm min-w-40">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="client" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Client</label>
+            <Select id="client" name="client" defaultValue={client} className="field field-sm w-full">
               <option value="">All clients</option>
               {clients.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -135,9 +160,9 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
           </div>
         )}
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="status" className="text-xs font-medium text-gs-gray">Status</label>
-          <Select id="status" name="status" defaultValue={status} className="field field-sm min-w-36">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="status" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Status</label>
+          <Select id="status" name="status" defaultValue={status} className="field field-sm w-full">
             <option value="">All statuses</option>
             {STATUS_ORDER.map((st) => (
               <option key={st} value={st}>{STATUS_STYLE[st].label} ({statusCount(st)})</option>
@@ -145,25 +170,15 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="progress" className="text-xs font-medium text-gs-gray">Progress</label>
-          <Select id="progress" name="progress" defaultValue={progress} className="field field-sm min-w-36">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="progress" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Progress</label>
+          <Select id="progress" name="progress" defaultValue={progress} className="field field-sm w-full">
             <option value="">Any progress</option>
             <option value="not-started">Not started</option>
             <option value="in-progress">In progress</option>
             <option value="done">All tasks done</option>
           </Select>
         </div>
-
-        <div className="flex min-h-9 items-center gap-3 pb-0.5 text-sm text-gs-gray sm:ml-auto">
-          <span>
-            {filtered.length} of {all.length} {all.length === 1 ? "sprint" : "sprints"}
-          </span>
-          {anyFilter && (
-            <Link href="/sprints" className="font-medium text-gs-red hover:underline">
-              Clear filters
-            </Link>
-          )}
         </div>
       </AutoFilterForm>
 
@@ -207,14 +222,14 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
               </header>
 
               <div className="table-scroll">
-                <table className="w-full min-w-[560px] text-sm">
-                  <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
+                <table className="w-full min-w-[720px] table-fixed text-sm">
+                  <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
                     <tr>
-                      <th className="whitespace-nowrap px-4 py-2">Sprint</th>
-                      <th className="whitespace-nowrap px-4 py-2">Status</th>
-                      <th className="whitespace-nowrap px-4 py-2">Dates</th>
+                      <th className="w-[26%] whitespace-nowrap px-4 py-2">Sprint</th>
+                      <th className="w-[13%] whitespace-nowrap px-4 py-2">Status</th>
+                      <th className="w-[22%] whitespace-nowrap px-4 py-2">Dates</th>
                       <th className="whitespace-nowrap px-4 py-2">Progress</th>
-                      <th className="w-8" aria-label="Open" />
+                      <th className="w-10" aria-label="Open" />
                     </tr>
                   </thead>
                   <tbody>
@@ -225,20 +240,20 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
                         label={`Open ${s.name}`}
                       >
                       
-                        <td className="px-4 py-2.5">
+                        <td className="px-4 py-3">
                           <span className="font-medium group-hover:text-gs-red">{s.name}</span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5">
+                        <td className="whitespace-nowrap px-4 py-3">
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLE[s.status].chip}`}
                           >
                             {STATUS_STYLE[s.status].label}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">
+                        <td className="whitespace-nowrap px-4 py-3 text-gs-gray">
                           {formatDate(s.startDate)} – {formatDate(s.endDate)}
                         </td>
-                        <td className="min-w-52 px-4 py-2.5">
+                        <td className="px-4 py-3">
                           <SprintProgress counts={s.counts} />
                         </td>
                                             </SprintLinkRow>

@@ -632,61 +632,76 @@ export default async function ProjectDetailPage({
     // (Task/Assignee/Due Date/Priority/Status/Revisions) that were cramped to ~78px for
     // Due Date at max-w-2xl, tight enough for an overdue badge to wrap awkwardly.
     <div>
-      <Link href="/projects" className="text-sm text-gs-gray hover:text-gs-black hover:underline">
-        ← Projects
-      </Link>
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gs-gray">
+        <Link href="/projects" className="hover:text-gs-black hover:underline">
+          Projects
+        </Link>
+        <span aria-hidden>/</span>
+        <span className="truncate font-medium text-gs-black/70">{project.name}</span>
+      </nav>
 
-      <header className="mt-3 rounded-xl border border-gs-gray/10 bg-white p-5 shadow-sm md:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight md:text-[28px]">{project.name}</h1>
-              <ProjectStatusChip status={project.status} />
-              {project.archivedAt && (
-                <span className="rounded-full bg-gs-light px-2.5 py-0.5 text-xs font-medium text-gs-gray">Archived</span>
-              )}
+      {/* One card: identity, key facts, then the section tabs along its bottom edge (Zoho-style). */}
+      <header className="mt-3 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4 p-5 md:p-6">
+          <div className="flex min-w-0 items-start gap-4">
+            <span
+              aria-hidden
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gs-red/10 font-heading text-xl font-semibold text-gs-red"
+            >
+              {project.name.charAt(0).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+                <ProjectStatusChip status={project.status} />
+                {project.archivedAt && (
+                  <span className="rounded-full bg-gs-light px-2.5 py-0.5 text-xs font-medium text-gs-gray">Archived</span>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="rounded-md bg-gs-black/5 px-2 py-1 font-medium text-gs-black/75">{project.client.name}</span>
+                <span className="rounded-md bg-gs-black/5 px-2 py-1 text-gs-gray">{project.cluster.name}</span>
+                <span className="rounded-md bg-gs-black/5 px-2 py-1 text-gs-gray">{project.serviceType.name}</span>
+                {project.referenceNumber && (
+                  <span className="rounded-md bg-gs-black/5 px-2 py-1 tabular-nums text-gs-gray">Ref {project.referenceNumber}</span>
+                )}
+              </div>
             </div>
-            <p className="mt-1.5 text-sm text-gs-gray">
-              {project.client.name} · {project.cluster.name} · {project.serviceType.name}
-              {project.referenceNumber ? ` · Ref ${project.referenceNumber}` : ""}
-            </p>
           </div>
           {canSeeProjectTotal && (
-            <Link
-              href={`/projects/${project.id}/report`}
-              className="btn btn-secondary"
-            >
+            <Link href={`/projects/${project.id}/report`} className="btn btn-secondary">
               Core Project/Task Report
             </Link>
           )}
         </div>
 
-        <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-gs-gray/10 pt-4 sm:grid-cols-4">
+        <dl className="grid grid-cols-2 border-t border-gs-gray/10 sm:grid-cols-4 [&>div]:px-5 [&>div]:py-3.5 md:[&>div]:px-6 [&>div:not(:first-child)]:border-gs-gray/10 sm:[&>div:not(:first-child)]:border-l">
           <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-gs-gray">Deadline</dt>
-            <dd className={`mt-1 text-sm font-semibold ${deadlinePassed ? "text-gs-red" : ""}`}>
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Deadline</dt>
+            <dd className={`mt-1 font-heading text-base font-semibold ${deadlinePassed ? "text-gs-red" : ""}`}>
               {project.deadline ? formatDate(project.deadline) : "—"}
               {deadlinePassed && <span className="ml-1.5 text-xs font-medium">Overdue</span>}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-gs-gray">Start date</dt>
-            <dd className="mt-1 text-sm font-semibold">{project.startDate ? formatDate(project.startDate) : "—"}</dd>
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Start date</dt>
+            <dd className="mt-1 font-heading text-base font-semibold">{project.startDate ? formatDate(project.startDate) : "—"}</dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-gs-gray">Tasks</dt>
-            <dd className="mt-1 text-sm font-semibold tabular-nums">{taskCount}</dd>
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Tasks</dt>
+            <dd className="mt-1 font-heading text-base font-semibold tabular-nums">{taskCount}</dd>
           </div>
           {canSeeProjectTotal && (
             <div>
-              <dt className="text-xs font-medium uppercase tracking-wide text-gs-gray">Time logged</dt>
-              <dd className="mt-1 text-sm font-semibold tabular-nums">{formatDuration(projectTotalSeconds)}</dd>
+              <dt className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Time logged</dt>
+              <dd className="mt-1 font-heading text-base font-semibold tabular-nums">{formatDuration(projectTotalSeconds)}</dd>
             </div>
           )}
         </dl>
+
       </header>
 
-      <nav aria-label="Project sections" className="mt-6 flex gap-1 border-b border-gs-gray/20">
+      <nav aria-label="Project sections" className="mt-3 flex gap-1 overflow-x-auto overflow-y-hidden rounded-xl border border-gs-gray/10 bg-white px-2 shadow-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((t) => {
           const active = t.key === activeTab;
           return (
@@ -694,13 +709,17 @@ export default async function ProjectDetailPage({
               key={t.key}
               href={t.href}
               aria-current={active ? "page" : undefined}
-              className={`-mb-px flex min-h-11 items-center gap-2 border-b-2 px-4 text-sm font-medium transition-colors ${
+              className={`flex min-h-12 shrink-0 items-center gap-2 border-b-2 px-4 text-sm font-medium transition-colors ${
                 active ? "border-gs-red text-gs-black" : "border-transparent text-gs-gray hover:text-gs-black"
               }`}
             >
               {t.label}
               {t.count !== undefined && (
-                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold tabular-nums text-gs-gray shadow-sm">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
+                    active ? "bg-gs-red/10 text-gs-red" : "bg-white text-gs-gray shadow-sm"
+                  }`}
+                >
                   {t.count}
                 </span>
               )}
@@ -710,7 +729,7 @@ export default async function ProjectDetailPage({
       </nav>
 
       {activeTab === "tasks" ? (
-        <div className="pt-2">
+        <div className="pt-5">
           <TaskDrawerProvider>
           <TaskViews
             surfacePath={`/projects/${project.id}`}
@@ -750,7 +769,7 @@ export default async function ProjectDetailPage({
           </TaskDrawerProvider>
         </div>
       ) : activeTab === "sprints" ? (
-        <div className="pt-4">
+        <div className="pt-5">
           {/* Each sprint is an expandable panel with its own board. The sprint picked in the URL
               (?sprint=, e.g. from the Sprints menu) starts open; otherwise the Active one does. */}
           <SprintsSection
@@ -788,7 +807,7 @@ export default async function ProjectDetailPage({
           />
         </div>
       ) : activeTab === "bugs" ? (
-        <div className="pt-4">
+        <div className="pt-5">
           <BugsSection
             projectId={project.id}
             surfacePath={`/projects/${project.id}`}
@@ -808,7 +827,7 @@ export default async function ProjectDetailPage({
           />
         </div>
       ) : (
-        <div className="pt-2">
+        <div className="pt-5">
           <CompletionSection groups={completionGroups} />
 
           {/* Constrained narrower than the page itself — short form fields/labels stretching

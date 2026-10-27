@@ -26,9 +26,9 @@
      theme tokens re-skins every rounded and shadow utility already used across the app. */
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.25rem;
-  --shadow-sm: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --shadow-sm: 0 1px 2px 0 rgb(16 24 40 / 0.04);
   --shadow-md: 0 6px 16px -4px rgb(16 24 40 / 0.1), 0 2px 6px -2px rgb(16 24 40 / 0.06);
   --shadow-lg: 0 20px 40px -12px rgb(16 24 40 / 0.22), 0 6px 12px -6px rgb(16 24 40 / 0.1);
   --font-heading: var(--font-heading);

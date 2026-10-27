@@ -14,7 +14,7 @@ import { NewTaskButton } from "@/components/new-task-button";
 import { getCreatableProjects } from "@/lib/actions/task-create";
 import { isFailure } from "@/lib/action-result";
 import { PageHeader } from "@/components/page-header";
-import { PriorityPill, RevisionBadge, TaskStatusChip } from "@/components/task-chips";
+import { PriorityPill, RevisionBadge, StatusRing, TaskStatusChip } from "@/components/task-chips";
 import { SprintProgress } from "@/components/sprint-progress";
 import { bugCountsOf } from "@/lib/bug-sprints";
 import { AutoFilterForm } from "@/components/auto-filter-form";
@@ -290,12 +290,12 @@ export default async function MyTasksPage({
     const done = t.status === "COMPLETED";
     return (
       <>
-        <td className="px-4 py-2" style={indent ? { paddingLeft: "2rem" } : undefined}>
+        <td className="px-4 py-3" style={indent ? { paddingLeft: "2rem" } : undefined}>
           <span className="inline-flex items-center">
             {indent && <span className="mr-1 text-gs-gray/50">└</span>}
             {/* Completed work reads differently from pending work at a glance (QA D-04): a green
                 tick, a struck-through grey title, and a muted row. */}
-            {done && <span className="mr-1.5 text-emerald-600" aria-label="Completed" title="Completed">✓</span>}
+            <StatusRing status={t.status} />
             <TaskOpener
               taskId={t.id}
               projectId={t.projectId}
@@ -311,11 +311,11 @@ export default async function MyTasksPage({
             )}
           </span>
         </td>
-        <td className="whitespace-nowrap px-4 py-2 text-gs-gray">
+        <td className="whitespace-nowrap px-4 py-3 text-gs-gray">
           {formatDate(t.dueDate)}
           <OverdueBadge dueDate={t.dueDate} status={t.status} />
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5">
+        <td className="whitespace-nowrap px-4 py-3">
           {t.assignedToId === meId ? (
             <span className="text-gs-gray">Me</span>
           ) : (
@@ -324,14 +324,14 @@ export default async function MyTasksPage({
             </span>
           )}
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.createdById === meId ? "Me" : t.createdBy.name}</td>
-        <td className="whitespace-nowrap px-4 py-2.5">
+        <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{t.createdById === meId ? "Me" : t.createdBy.name}</td>
+        <td className="whitespace-nowrap px-4 py-3">
           <PriorityPill priority={t.priority} />
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5">
+        <td className="whitespace-nowrap px-4 py-3">
           <TaskStatusChip status={t.status} label={statusLabel(t.status, t.taskType)} />
         </td>
-        <td className="px-4 py-2.5">
+        <td className="px-4 py-3">
           <RevisionBadge count={t.revisionCount} />
         </td>
       </>
@@ -341,8 +341,9 @@ export default async function MyTasksPage({
   function BucketRow({ t }: { t: Row }) {
     return (
       <TaskRow taskId={t.id} projectId={t.projectId} className="border-t border-gs-gray/10">
-        <td className="px-4 py-2">
+        <td className="px-4 py-3">
           <span className="inline-flex items-center">
+            <StatusRing status={t.status} />
             <TaskOpener taskId={t.id} projectId={t.projectId} className="font-medium transition-colors hover:text-gs-red">{t.name}</TaskOpener>
             {runningTaskIds.has(t.id) && (
               <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-gs-red/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gs-red">
@@ -352,12 +353,12 @@ export default async function MyTasksPage({
             )}
           </span>
         </td>
-        <td className="whitespace-nowrap px-4 py-2 text-gs-gray">{t.project.name}</td>
-        <td className="whitespace-nowrap px-4 py-2 text-gs-gray">
+        <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{t.project.name}</td>
+        <td className="whitespace-nowrap px-4 py-3 text-gs-gray">
           {formatDate(t.dueDate)}
           <OverdueBadge dueDate={t.dueDate} status={t.status} />
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5">
+        <td className="whitespace-nowrap px-4 py-3">
           {t.assignedToId === meId ? (
             <span className="text-gs-gray">Me</span>
           ) : (
@@ -366,11 +367,11 @@ export default async function MyTasksPage({
             </span>
           )}
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5 text-gs-gray">{t.createdById === meId ? "Me" : t.createdBy.name}</td>
-        <td className="whitespace-nowrap px-4 py-2.5">
+        <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{t.createdById === meId ? "Me" : t.createdBy.name}</td>
+        <td className="whitespace-nowrap px-4 py-3">
           <PriorityPill priority={t.priority} />
         </td>
-        <td className="whitespace-nowrap px-4 py-2.5">
+        <td className="whitespace-nowrap px-4 py-3">
           <TaskStatusChip status={t.status} label={statusLabel(t.status, t.taskType)} />
         </td>
       </TaskRow>
@@ -412,7 +413,7 @@ export default async function MyTasksPage({
               <div className="mt-2 overflow-hidden rounded-lg border border-gs-gray/15 bg-white">
                 <div className="table-scroll">
                   <table className="w-full min-w-[800px] text-sm">
-                    <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
+                    <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
                       <tr>
                         <th className="whitespace-nowrap px-4 py-2">Task</th>
                         <th className="whitespace-nowrap px-4 py-2">Project</th>
@@ -441,10 +442,10 @@ export default async function MyTasksPage({
   // Projects this person may create a task in — a "+ Add task" shows on those projects' headings only.
   const creatable = await getCreatableProjects();
   const creatableIds = new Set(isFailure(creatable) ? [] : creatable.map((p) => p.id));
-  // Progress per project: ALL the top-level tasks listed for it (not just the filtered ones), so the bar
-  // always reads the project's real state on your plate.
+  // Progress per project: the tasks the current filters leave for it, so the bar and its numbers move with
+  // the filters. Every task listed (subtasks included), so the bar always adds up to the cards on the board.
   const progressFor = (projectId: string) => {
-    const mine = sprintScoped.filter((t) => t.projectId === projectId && t.parentTaskId === null);
+    const mine = tasks.filter((t) => t.projectId === projectId);
     if (mine.length === 0) return null;
     return <SprintProgress counts={bugCountsOf(mine)} size="sm" showLegend className="w-full" />;
   };
@@ -511,38 +512,71 @@ export default async function MyTasksPage({
           while the filters below narrow the lists. */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Open tasks", value: scopeOpen.length, tone: "" },
-          { label: "Overdue", value: scopeOverdue, tone: scopeOverdue > 0 ? "text-gs-red" : "" },
-          { label: "Due today", value: scopeToday, tone: scopeToday > 0 ? "text-amber-600" : "" },
-          { label: "In review", value: scopeOpen.filter((t) => t.status === "REVIEW").length, tone: "" },
-        ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-gs-gray/10 bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md">
-            <p className="text-xs font-medium text-gs-gray">{s.label}</p>
-            <p className={`mt-1 font-heading text-2xl font-bold tabular-nums ${s.tone}`}>{s.value}</p>
-          </div>
+          { label: "Open tasks", value: scopeOpen.length, tone: "", href: "/my-tasks?status=open", on: fStatus === "open" && !fDue, accent: "bg-sky-500" },
+          { label: "Overdue", value: scopeOverdue, tone: scopeOverdue > 0 ? "text-gs-red" : "", href: "/my-tasks?due=overdue", on: fDue === "overdue", accent: "bg-gs-red" },
+          { label: "Due today", value: scopeToday, tone: scopeToday > 0 ? "text-amber-600" : "", href: "/my-tasks?due=today", on: fDue === "today", accent: "bg-amber-500" },
+          { label: "In review", value: scopeOpen.filter((t) => t.status === "REVIEW").length, tone: "", href: "/my-tasks?status=REVIEW", on: fStatus === "REVIEW", accent: "bg-violet-500" },
+        ].map((st) => (
+          <Link
+            key={st.label}
+            href={st.href}
+            aria-current={st.on ? "true" : undefined}
+            className={`group relative overflow-hidden rounded-xl border bg-white px-4 py-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+              st.on ? "border-gs-black/30 ring-1 ring-gs-black/10" : "border-gs-gray/10"
+            }`}
+          >
+            <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${st.accent}`} />
+            <p className="text-xs font-medium text-gs-gray">{st.label}</p>
+            <p className={`mt-1 font-heading text-2xl font-bold tabular-nums ${st.tone}`}>{st.value}</p>
+          </Link>
         ))}
       </div>
 
       {/* Filter bar — applies as you change it; one filter drives List, Kanban, Calendar and By Due
           Date, so every view shows the same tasks. */}
-      <AutoFilterForm className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-gs-gray/10 bg-white p-3 shadow-sm">
-        <div className="flex w-full flex-col gap-1 sm:w-64">
-          <label htmlFor="q" className="text-xs font-medium text-gs-gray">Search</label>
-          <input
-            id="q"
-            name="q"
-            type="search"
-            defaultValue={fQ}
-            placeholder="Task or project…"
-            autoComplete="off"
-            className="field field-sm w-full"
-          />
+      <AutoFilterForm className="mt-4 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="relative w-full sm:w-80">
+            <svg
+              aria-hidden
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gs-gray"
+            >
+              <circle cx="9" cy="9" r="5.5" />
+              <path d="m13.5 13.5 3.5 3.5" />
+            </svg>
+            <label htmlFor="q" className="sr-only">Search</label>
+            <input
+              id="q"
+              name="q"
+              type="search"
+              defaultValue={fQ}
+              placeholder="Search tasks or projects…"
+              autoComplete="off"
+              className="field field-sm w-full pl-9"
+            />
+          </div>
+        <div className="flex items-center gap-3 text-sm text-gs-gray">
+          <span>
+            {tasks.length} of {sprintScoped.length} {sprintScoped.length === 1 ? "task" : "tasks"}
+          </span>
+          {anyFilter && (
+            <Link href="/my-tasks" className="font-medium text-gs-red hover:underline">
+              Clear filters
+            </Link>
+          )}
+        </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-gs-gray/10 bg-gs-light/40 px-4 py-3.5 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
         {projectOptions.length > 1 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="project" className="text-xs font-medium text-gs-gray">Project</label>
-            <Select id="project" name="project" defaultValue={fProject} className="field field-sm min-w-44">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="project" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Project</label>
+            <Select id="project" name="project" defaultValue={fProject} className="field field-sm w-full">
               <option value="">All projects</option>
               {projectOptions.map(([id, p]) => (
                 <option key={id} value={id} data-sub={p.client}>{p.name}</option>
@@ -551,9 +585,9 @@ export default async function MyTasksPage({
           </div>
         )}
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="status" className="text-xs font-medium text-gs-gray">Status</label>
-          <Select id="status" name="status" defaultValue={fStatus} className="field field-sm min-w-40">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="status" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Status</label>
+          <Select id="status" name="status" defaultValue={fStatus} className="field field-sm w-full">
             <option value="">All statuses</option>
             <option value="open">Open (not completed)</option>
             <option value="completed">Completed</option>
@@ -565,9 +599,9 @@ export default async function MyTasksPage({
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="due" className="text-xs font-medium text-gs-gray">Due</label>
-          <Select id="due" name="due" defaultValue={fDue} className="field field-sm min-w-36">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="due" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Due</label>
+          <Select id="due" name="due" defaultValue={fDue} className="field field-sm w-full">
             <option value="">Any time</option>
             <option value="overdue">Overdue</option>
             <option value="today">Today</option>
@@ -576,9 +610,9 @@ export default async function MyTasksPage({
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="priority" className="text-xs font-medium text-gs-gray">Priority</label>
-          <Select id="priority" name="priority" defaultValue={fPriority} className="field field-sm min-w-36">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="priority" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Priority</label>
+          <Select id="priority" name="priority" defaultValue={fPriority} className="field field-sm w-full">
             <option value="">Any priority</option>
             <option value="URGENT">Urgent</option>
             <option value="HIGH">High</option>
@@ -588,9 +622,9 @@ export default async function MyTasksPage({
         </div>
 
         {assigneeOptions.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="assignee" className="text-xs font-medium text-gs-gray">Assigned to</label>
-            <Select id="assignee" name="assignee" defaultValue={fAssignee} className="field field-sm min-w-40">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="assignee" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Assigned to</label>
+            <Select id="assignee" name="assignee" defaultValue={fAssignee} className="field field-sm w-full">
               <option value="">Everyone</option>
               <option value="me">Me</option>
               {assigneeOptions.map(([id, name]) => (
@@ -601,9 +635,9 @@ export default async function MyTasksPage({
         )}
 
         {sprintWorkflowRelevant && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="sprint" className="text-xs font-medium text-gs-gray">Sprint</label>
-            <Select id="sprint" name="sprint" defaultValue={validSprintFilter} className="field field-sm min-w-36">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="sprint" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Sprint</label>
+            <Select id="sprint" name="sprint" defaultValue={validSprintFilter} className="field field-sm w-full">
               <option value="">All tasks</option>
               <option value="active">Active Sprint</option>
               <option value="backlog">Backlog</option>
@@ -618,15 +652,6 @@ export default async function MyTasksPage({
           </div>
         )}
 
-        <div className="flex min-h-9 items-center gap-3 pb-0.5 text-sm text-gs-gray sm:ml-auto">
-          <span>
-            {tasks.length} of {sprintScoped.length} {sprintScoped.length === 1 ? "task" : "tasks"}
-          </span>
-          {anyFilter && (
-            <Link href="/my-tasks" className="font-medium text-gs-red hover:underline">
-              Clear filters
-            </Link>
-          )}
         </div>
       </AutoFilterForm>
 
@@ -652,7 +677,7 @@ export default async function MyTasksPage({
             <div>
               <div className="table-scroll">
                 <table className="w-full min-w-[560px] text-sm">
-                  <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
+                  <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
                     <tr>
                       <th className="whitespace-nowrap px-4 py-2">Task</th>
                       <th className="whitespace-nowrap px-4 py-2">Due Date</th>

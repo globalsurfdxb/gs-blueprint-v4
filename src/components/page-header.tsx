@@ -18,7 +18,7 @@ export function PageHeader({
     <header className="page-header flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-gs-gray/15 pb-5">
       <div className="min-w-0">
         {eyebrow && <p className="text-xs font-semibold uppercase tracking-wider text-gs-red">{eyebrow}</p>}
-        <h1 className="mt-0.5 font-heading text-2xl font-semibold tracking-tight text-gs-black md:text-[28px] md:leading-9">
+        <h1 className="mt-0.5 font-heading text-2xl font-semibold tracking-tight text-gs-black md:text-2xl md:leading-8">
           {title}
         </h1>
         {description && <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-gs-gray">{description}</p>}

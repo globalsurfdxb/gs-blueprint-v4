@@ -225,7 +225,8 @@ export function AppShell({
     };
   }, [navOpen]);
 
-  const hasSearch = navItems.some((i) => i.href === "/search");
+  // Search is open to everyone; each role only finds what it can already see (see lib/search.ts).
+  const hasSearch = true;
 
   // Press "/" anywhere (outside a text field) to jump to the search box — the usual power-user shortcut.
   const searchRef = useRef<HTMLInputElement>(null);
@@ -271,7 +272,7 @@ export function AppShell({
           collapsed ? "md:w-[4.5rem]" : "md:w-60"
         } ${navOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className={`flex h-16 shrink-0 items-center px-5 ${collapsed ? "md:justify-center md:px-0" : ""}`}>
+        <div className={`flex h-14 shrink-0 items-center px-5 ${collapsed ? "md:justify-center md:px-0" : ""}`}>
           {/* Full GS Blueprint logo; the sidebar collapses to just the GS monogram. */}
           <Image
             src="/gs-blueprint-logo-light.svg"
@@ -293,7 +294,7 @@ export function AppShell({
           />
         </div>
 
-        <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-4">
+        <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-4 pt-1">
           {navItems.map((item, i) => {
             const active = item.href === activeHref;
             const startsSection = item.section && item.section !== navItems[i - 1]?.section;
@@ -305,7 +306,7 @@ export function AppShell({
                   ) : null)}
                 {startsSection && (
                   <p
-                    className={`mt-5 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-white/40 ${
+                    className={`mt-5 px-3 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white/35 ${
                       collapsed ? "md:hidden" : ""
                     }`}
                   >
@@ -317,7 +318,7 @@ export function AppShell({
                   onClick={() => setNavOpen(false)}
                   aria-current={active ? "page" : undefined}
                   title={collapsed ? item.label : undefined}
-                  className={`relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
+                  className={`relative flex min-h-10 items-center gap-3 rounded-md px-3 text-[13.5px] font-medium transition-colors ${
                     collapsed ? "md:justify-center md:px-0" : ""
                   } ${
                     active
@@ -336,6 +337,26 @@ export function AppShell({
           })}
         </nav>
 
+        <Link
+          href="/profile"
+          onClick={() => setNavOpen(false)}
+          title={collapsed ? userName : undefined}
+          className={`mx-3 mb-2 flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] p-2.5 transition-colors hover:bg-white/[0.08] ${
+            collapsed ? "md:justify-center md:border-transparent md:bg-transparent md:p-1.5" : ""
+          }`}
+        >
+          <span
+            aria-hidden
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gs-red text-sm font-semibold text-white"
+          >
+            {initial}
+          </span>
+          <span className={`min-w-0 ${collapsed ? "md:sr-only" : ""}`}>
+            <span className="block truncate text-[13px] font-medium text-white">{userName}</span>
+            <span className="block truncate text-[11px] text-white/45">{userEmail}</span>
+          </span>
+        </Link>
+
         <button
           type="button"
           onClick={toggleCollapsed}
@@ -351,7 +372,7 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-gs-gray/15 bg-white/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-white/80 md:px-6">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-gs-gray/15 bg-white/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-white/85 md:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               type="button"

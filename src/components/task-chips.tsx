@@ -47,3 +47,28 @@ export function RevisionBadge({ count }: { count: number }) {
     </span>
   );
 }
+
+const RING: Record<string, string> = {
+  NEW: "border-gs-gray/40",
+  IN_PROGRESS: "border-sky-500",
+  REVIEW: "border-violet-500",
+  REVISION: "border-amber-500",
+  ON_HOLD: "border-gs-gray/40 border-dashed",
+};
+
+/** Zoho-style status circle that sits before a task title: an open ring in the status colour, a filled tick once done. */
+export function StatusRing({ status }: { status: string }) {
+  if (status === "COMPLETED") {
+    return (
+      <span
+        aria-hidden
+        className="mr-2.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"
+      >
+        <svg viewBox="0 0 16 16" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m3.5 8.5 3 3 6-7" />
+        </svg>
+      </span>
+    );
+  }
+  return <span aria-hidden className={`mr-2.5 inline-block h-4 w-4 shrink-0 rounded-full border-2 ${RING[status] ?? RING.NEW}`} />;
+}
