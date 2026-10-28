@@ -259,23 +259,48 @@ Work submitted for your review, or still unassigned, across every project you le
       />
 
       {/* Filter bar — applies as you change it (search waits for a short pause). */}
-      <AutoFilterForm className="mt-5 flex flex-wrap items-end gap-3 rounded-xl border border-gs-gray/10 bg-white p-3 shadow-sm">
-        <div className="flex w-full flex-col gap-1 sm:w-64">
-          <label htmlFor="q" className="text-xs font-medium text-gs-gray">Search</label>
-          <input
-            id="q"
-            name="q"
-            type="search"
-            defaultValue={fQ}
-            placeholder="Task, project or person…"
-            autoComplete="off"
-            className="field field-sm w-full"
-          />
+      <AutoFilterForm className="mt-5 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="relative w-full sm:w-80">
+            <svg
+              aria-hidden
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gs-gray"
+            >
+              <circle cx="9" cy="9" r="5.5" />
+              <path d="m13.5 13.5 3.5 3.5" />
+            </svg>
+            <label htmlFor="q" className="sr-only">Search</label>
+            <input
+              id="q"
+              name="q"
+              type="search"
+              defaultValue={fQ}
+              placeholder="Task, project or person…"
+              autoComplete="off"
+              className="field field-sm w-full pl-9"
+            />
+          </div>
+        <div className="flex items-center gap-3 text-sm text-gs-gray">
+          <span>
+            {tasks.length} of {viewTasks.length} {viewTasks.length === 1 ? "task" : "tasks"}
+          </span>
+          {anyFilter && (
+            <Link href="/my-reviews" className="font-medium text-gs-red hover:underline">
+              Clear filters
+            </Link>
+          )}
+        </div>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="view" className="text-xs font-medium text-gs-gray">Show</label>
-          <Select id="view" name="view" defaultValue={view} className="field field-sm min-w-44">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-gs-gray/10 bg-gs-light/40 px-4 py-3.5 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="view" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Show</label>
+          <Select id="view" name="view" defaultValue={view} className="field field-sm w-full">
             {Object.entries(VIEWS).map(([key, label]) => (
               <option key={key} value={key}>{label}</option>
             ))}
@@ -283,9 +308,9 @@ Work submitted for your review, or still unassigned, across every project you le
         </div>
 
         {projectOptions.length > 1 && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="project" className="text-xs font-medium text-gs-gray">Project</label>
-            <Select id="project" name="project" defaultValue={fProject} className="field field-sm min-w-44">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="project" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Project</label>
+            <Select id="project" name="project" defaultValue={fProject} className="field field-sm w-full">
               <option value="">All projects</option>
               {projectOptions.map(([id, p]) => (
                 <option key={id} value={id} data-sub={p.client}>{p.name}</option>
@@ -295,9 +320,9 @@ Work submitted for your review, or still unassigned, across every project you le
         )}
 
         {(assigneeOptions.length > 0 || hasUnassigned) && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="assignee" className="text-xs font-medium text-gs-gray">Assignee</label>
-            <Select id="assignee" name="assignee" defaultValue={fAssignee} className="field field-sm min-w-40">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="assignee" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Assignee</label>
+            <Select id="assignee" name="assignee" defaultValue={fAssignee} className="field field-sm w-full">
               <option value="">Everyone</option>
               {hasUnassigned && <option value="none">Unassigned</option>}
               {assigneeOptions.map(([id, name]) => (
@@ -307,9 +332,9 @@ Work submitted for your review, or still unassigned, across every project you le
           </div>
         )}
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="status" className="text-xs font-medium text-gs-gray">Status</label>
-          <Select id="status" name="status" defaultValue={fStatus} className="field field-sm min-w-36">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="status" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Status</label>
+          <Select id="status" name="status" defaultValue={fStatus} className="field field-sm w-full">
             <option value="">All statuses</option>
             <option value="NEW">New</option>
             <option value="IN_PROGRESS">In Progress</option>
@@ -319,9 +344,9 @@ Work submitted for your review, or still unassigned, across every project you le
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="due" className="text-xs font-medium text-gs-gray">Due</label>
-          <Select id="due" name="due" defaultValue={fDue} className="field field-sm min-w-36">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="due" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Due</label>
+          <Select id="due" name="due" defaultValue={fDue} className="field field-sm w-full">
             <option value="">Any time</option>
             <option value="overdue">Overdue</option>
             <option value="today">Today</option>
@@ -329,9 +354,9 @@ Work submitted for your review, or still unassigned, across every project you le
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="priority" className="text-xs font-medium text-gs-gray">Priority</label>
-          <Select id="priority" name="priority" defaultValue={fPriority} className="field field-sm min-w-36">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="priority" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Priority</label>
+          <Select id="priority" name="priority" defaultValue={fPriority} className="field field-sm w-full">
             <option value="">Any priority</option>
             <option value="URGENT">Urgent</option>
             <option value="HIGH">High</option>
@@ -340,9 +365,9 @@ Work submitted for your review, or still unassigned, across every project you le
           </Select>
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="revisions" className="text-xs font-medium text-gs-gray">Revisions</label>
-          <Select id="revisions" name="revisions" defaultValue={fRevisions ? String(fRevisions) : ""} className="field field-sm min-w-36">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <label htmlFor="revisions" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Revisions</label>
+          <Select id="revisions" name="revisions" defaultValue={fRevisions ? String(fRevisions) : ""} className="field field-sm w-full">
             <option value="">Any</option>
             <option value="1">1 or more</option>
             <option value="2">2 or more (flagged)</option>
@@ -350,25 +375,15 @@ Work submitted for your review, or still unassigned, across every project you le
         </div>
 
         {hasBugs && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor="type" className="text-xs font-medium text-gs-gray">Type</label>
-            <Select id="type" name="type" defaultValue={fType} className="field field-sm min-w-32">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <label htmlFor="type" className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Type</label>
+            <Select id="type" name="type" defaultValue={fType} className="field field-sm w-full">
               <option value="">Tasks &amp; bugs</option>
               <option value="STANDARD">Tasks</option>
               <option value="BUG">Bugs</option>
             </Select>
           </div>
         )}
-
-        <div className="flex min-h-9 items-center gap-3 pb-0.5 text-sm text-gs-gray sm:ml-auto">
-          <span>
-            {tasks.length} of {viewTasks.length} {viewTasks.length === 1 ? "task" : "tasks"}
-          </span>
-          {anyFilter && (
-            <Link href="/my-reviews" className="font-medium text-gs-red hover:underline">
-              Clear filters
-            </Link>
-          )}
         </div>
       </AutoFilterForm>
 
@@ -393,7 +408,7 @@ Work submitted for your review, or still unassigned, across every project you le
               <div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[520px] text-sm">
-                    <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
+                    <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
                       <tr>
                         <th className="whitespace-nowrap px-4 py-3">Task</th>
                         <th className="whitespace-nowrap px-4 py-3">Assignee</th>
@@ -434,7 +449,7 @@ Work submitted for your review, or still unassigned, across every project you le
             <div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-sm">
-                  <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
+                  <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
                     <tr>
                       <th className="whitespace-nowrap px-4 py-3">Task</th>
                       <th className="whitespace-nowrap px-4 py-3">Assignee</th>
