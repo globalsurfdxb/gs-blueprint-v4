@@ -64,7 +64,7 @@ export default async function DependencyTrackerPage({
     prisma.project.findMany({
       where: { dependencyTrackerId: user.id, archivedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, client: { select: { name: true } } },
     }),
     loadActiveTrackerRows(user.id, user.location, now),
   ]);
@@ -106,7 +106,7 @@ Active cross-department work on the projects you coordinate — view only. Compl
           <Select id="project" name="project" defaultValue={projectParam} className="field field-sm">
             <option value="">All projects</option>
             {projectOptions.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+              <option key={p.id} value={p.id}>{p.name} · {p.client.name}</option>
             ))}
           </Select>
         </div>

@@ -5,10 +5,11 @@ import { getCurrentUser } from "@/lib/auth";
 import { canCreateProject, canViewProject, hidesCompletedProjects, isAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
-import { unarchiveProject } from "@/lib/actions/projects";
+import { deleteProject, unarchiveProject } from "@/lib/actions/projects";
 import { ProjectStatusChip, projectStatusLabel } from "@/components/status-chip";
 import { PageHeader } from "@/components/page-header";
 import { UnarchiveProjectButton } from "./unarchive-project-button";
+import { DeleteProjectDialog } from "./delete-project-dialog";
 import { AutoFilterForm } from "@/components/auto-filter-form";
 import { Select } from "@/components/select";
 
@@ -288,7 +289,7 @@ export default async function ProjectsPage({
                 <th className="whitespace-nowrap px-4 py-3">Deadline</th>
                 <th className="whitespace-nowrap px-4 py-3">Status</th>
                 {showArchived && <th className="whitespace-nowrap px-4 py-3"></th>}
-                <th className="w-10 px-3 py-3" aria-hidden></th>
+                <th className="w-24 px-3 py-3" aria-hidden></th>
               </tr>
             </thead>
             <tbody>
@@ -351,8 +352,11 @@ export default async function ProjectsPage({
                         <UnarchiveProjectButton action={unarchiveProject.bind(null, p.id)} />
                       </td>
                     )}
-                    <td className="px-3 py-4 text-right text-gs-gray/50" aria-hidden>
-                      ›
+                    <td className="whitespace-nowrap px-3 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {admin && <DeleteProjectDialog projectName={p.name} action={deleteProject.bind(null, p.id)} />}
+                        <span aria-hidden className="text-gs-gray/50">›</span>
+                      </div>
                     </td>
                   </LinkRow>
                 );

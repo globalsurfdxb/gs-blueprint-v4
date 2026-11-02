@@ -85,7 +85,7 @@ export default async function SearchPage({
               <Select name="projectId" defaultValue={params.projectId} className={fieldClass}>
                 <option value="">All projects</option>
                 {options.projects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.id}>{p.name} · {p.clientName}</option>
                 ))}
               </Select>
             </label>

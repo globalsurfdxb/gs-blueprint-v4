@@ -43,6 +43,7 @@ import {
 } from "@/lib/actions/projects";
 import { ArchiveProjectButton } from "./archive-project-button";
 import { DeleteProjectForm } from "./delete-project-form";
+import { DeleteProjectDialog } from "../delete-project-dialog";
 import { UnarchiveProjectButton } from "../unarchive-project-button";
 import {
   addProjectAttachment,
@@ -668,11 +669,21 @@ export default async function ProjectDetailPage({
               </div>
             </div>
           </div>
-          {canSeeProjectTotal && (
-            <Link href={`/projects/${project.id}/report`} className="btn btn-secondary">
-              Core Project/Task Report
-            </Link>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {canSeeProjectTotal && (
+              <Link href={`/projects/${project.id}/report`} className="btn btn-secondary">
+                Core Project/Task Report
+              </Link>
+            )}
+            {isAdmin(user) && (
+              <DeleteProjectDialog
+                variant="button"
+                projectName={project.name}
+                summary={deleteSummary || undefined}
+                action={deleteProject.bind(null, project.id)}
+              />
+            )}
+          </div>
         </div>
 
         <dl className="grid grid-cols-2 border-t border-gs-gray/10 sm:grid-cols-4 [&>div]:px-5 [&>div]:py-3.5 md:[&>div]:px-6 [&>div:not(:first-child)]:border-gs-gray/10 sm:[&>div:not(:first-child)]:border-l">

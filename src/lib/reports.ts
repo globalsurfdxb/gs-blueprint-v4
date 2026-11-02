@@ -199,6 +199,7 @@ export async function getTimeByClientReport(user: CurrentUser): Promise<ClientHo
 export type TimeLogPeriod = "day" | "week" | "month" | "custom";
 
 export type TimeLogParams = {
+  clientId: string;
   projectId: string;
   assigneeId: string;
   period: TimeLogPeriod;
@@ -230,18 +231,28 @@ export type TimeLogReport = {
 };
 
 /** Filter dropdowns for the Time Logs report, each already narrowed to the viewer's scope. */
+/** Distinct clients across a project list, A–Z — the Client filter only offers clients that can return rows. */
+function clientsOf(projects: { clientId: string; clientName: string }[]) {
+  const byId = new Map<string, string>();
+  for (const p of projects) byId.set(p.clientId, p.clientName);
+  return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function getTimeLogFilterOptions(user: CurrentUser) {
   // A Contributor's hours report is self-only: their project options are the projects they've
   // actually logged time on, and the only "assignee" is themselves.
   if (isContributor(user)) {
     const logs = await prisma.timeLog.findMany({
       where: { userId: user.id, task: { project: { archivedAt: null } } },
-      select: { task: { select: { project: { select: { id: true, name: true } } } } },
+      select: { task: { select: { project: { select: { id: true, name: true, client: { select: { id: true, name: true } } } } } } },
     });
-    const projById = new Map<string, string>();
-    for (const l of logs) projById.set(l.task.project.id, l.task.project.name);
-    const projects = Array.from(projById, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-    return { projects, assignees: [{ id: user.id, name: user.name }] };
+    const projById = new Map<string, { name: string; clientId: string; clientName: string }>();
+    for (const l of logs) {
+      const c = l.task.project.client;
+      projById.set(l.task.project.id, { name: l.task.project.name, clientId: c.id, clientName: c.name });
+    }
+    const projects = Array.from(projById, ([id, p]) => ({ id, ...p })).sort((a, b) => a.name.localeCompare(b.name));
+    return { projects, clients: clientsOf(projects), assignees: [{ id: user.id, name: user.name }] };
   }
 
   const { taskWhere, projectWhere } = getReportScope(user);
@@ -250,7 +261,13 @@ export async function getTimeLogFilterOptions(user: CurrentUser) {
   // already logged time in scope (covers reassignments). Deriving only from time logs would
   // hide contributors who are assigned but haven't logged time yet.
   const [projects, taskAssignees, logUsers] = await Promise.all([
-    prisma.project.findMany({ where: projectWhere, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.project
+      .findMany({
+        where: projectWhere,
+        select: { id: true, name: true, client: { select: { id: true, name: true } } },
+        orderBy: { name: "asc" },
+      })
+      .then((rows) => rows.map((p) => ({ id: p.id, name: p.name, clientId: p.client.id, clientName: p.client.name }))),
     prisma.task.findMany({
       where: { ...taskWhere, assignedToId: { not: null } },
       select: { assignedToId: true, assignedTo: { select: { name: true } } },
@@ -271,7 +288,7 @@ export async function getTimeLogFilterOptions(user: CurrentUser) {
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return { projects, assignees };
+  return { projects, clients: clientsOf(projects), assignees };
 }
 
 /** Resolve a period preset (or a custom from/to) to an inclusive UTC day range. */
@@ -325,7 +342,13 @@ export async function getTimeLogReport(user: CurrentUser, params: TimeLogParams)
 
   const logs = await prisma.timeLog.findMany({
     where: {
-      task: { ...taskFilter, ...(params.projectId ? { projectId: params.projectId } : {}) },
+      task: {
+        AND: [
+          taskFilter,
+          ...(params.projectId ? [{ projectId: params.projectId }] : []),
+          ...(params.clientId ? [{ project: { clientId: params.clientId } }] : []),
+        ],
+      },
       ...userFilter,
       startTime: { gte: start, lt: endExclusive },
     },

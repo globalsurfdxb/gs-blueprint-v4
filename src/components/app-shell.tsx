@@ -273,25 +273,24 @@ export function AppShell({
         } ${navOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         <div className={`flex h-14 shrink-0 items-center px-5 ${collapsed ? "md:justify-center md:px-0" : ""}`}>
-          {/* Full GS Blueprint logo; the sidebar collapses to just the GS monogram. */}
-          <Image
-            src="/gs-blueprint-logo-light.svg"
-            alt="GS Blueprint"
-            width={171}
-            height={28}
-            priority
-            unoptimized
-            className={`h-7 w-auto ${collapsed ? "md:hidden" : ""}`}
-          />
-          <Image
-            src="/gs-icon-light.svg"
-            alt="GS"
-            width={46}
-            height={28}
-            priority
-            unoptimized
-            className={`hidden h-7 w-auto ${collapsed ? "md:block" : ""}`}
-          />
+          {/* The GS logo stays as is; "Blueprint" is the product title beside it. Collapsed: logo only. */}
+          <Link href="/" aria-label="GS Blueprint — home" className="flex items-center gap-3">
+            <Image
+              src="/gs-icon-light.svg"
+              alt="GS"
+              width={46}
+              height={28}
+              priority
+              unoptimized
+              className="h-7 w-auto shrink-0"
+            />
+            <span aria-hidden className={`h-5 w-px bg-white/20 ${collapsed ? "md:hidden" : ""}`} />
+            <span
+              className={`font-heading text-[17px] font-semibold tracking-tight text-white ${collapsed ? "md:hidden" : ""}`}
+            >
+              Blueprint
+            </span>
+          </Link>
         </div>
 
         <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-4 pt-1">

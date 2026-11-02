@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
     : "month";
 
   const params: TimeLogParams = {
+    clientId: str(sp.get("clientId")),
     projectId: str(sp.get("projectId")),
     assigneeId: str(sp.get("assigneeId")),
     period,

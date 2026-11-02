@@ -72,7 +72,7 @@ export type SearchResult = {
 
 export type SearchFilterOptions = {
   clients: { id: string; name: string }[];
-  projects: { id: string; name: string }[];
+  projects: { id: string; name: string; clientName: string }[];
   assignees: { id: string; name: string }[];
   // Agile Sprint Workflow (PRD 8.14): the Sprint filter appears only when Sprint-enabled work
   // is in the viewer's scope. `sprints` lists specific sprints they can filter to.
@@ -121,7 +121,7 @@ export async function getSearchFilterOptions(user: CurrentUser): Promise<SearchF
 
   return {
     clients: Array.from(clientsById.values()).sort((a, b) => a.name.localeCompare(b.name)),
-    projects: projects.map((p) => ({ id: p.id, name: p.name })),
+    projects: projects.map((p) => ({ id: p.id, name: p.name, clientName: p.client.name })),
     assignees,
     sprints: sprintRows.map((s) => ({ id: s.id, label: `${s.name} · ${s.project.name}` })),
     sprintWorkflowInScope: sprintEnabledGroupCount > 0,

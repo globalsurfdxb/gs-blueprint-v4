@@ -22,7 +22,11 @@ export default async function LoginPage({
       <div className="relative w-full max-w-sm rounded-2xl bg-white p-8 shadow-lg ring-1 ring-white/10">
         <div className="mb-7">
           <h1 className="sr-only">GS Blueprint</h1>
-          <Image src="/gs-blueprint-logo.svg" alt="GS Blueprint" width={208} height={34} priority unoptimized className="h-[34px] w-auto" />
+          <div className="flex items-center gap-3.5">
+            <Image src="/gs-icon.svg" alt="GS" width={56} height={34} priority unoptimized className="h-[34px] w-auto" />
+            <span aria-hidden className="h-6 w-px bg-gs-gray/30" />
+            <span aria-hidden className="font-heading text-2xl font-semibold tracking-tight text-gs-black">Blueprint</span>
+          </div>
           <p className="mt-3 font-body text-sm text-gs-gray">Where your projects, tasks, and time live.</p>
         </div>
         <LoginForm redirectTo={redirectTo} />

@@ -35,6 +35,7 @@ export default async function TimeLogsReportPage({
     : "month";
 
   const params: TimeLogParams = {
+    clientId: str(sp.clientId),
     projectId: str(sp.projectId),
     assigneeId: str(sp.assigneeId),
     period,
@@ -50,6 +51,7 @@ export default async function TimeLogsReportPage({
   // always matches what's shown (and the same scope, enforced server-side in the export route).
   const exportParams = new URLSearchParams();
   if (params.period) exportParams.set("period", params.period);
+  if (params.clientId) exportParams.set("clientId", params.clientId);
   if (params.projectId) exportParams.set("projectId", params.projectId);
   if (params.assigneeId) exportParams.set("assigneeId", params.assigneeId);
   if (params.from) exportParams.set("from", params.from);
@@ -78,7 +80,7 @@ export default async function TimeLogsReportPage({
         </>}
       />
 
-      <TimeLogsFilters projects={options.projects} assignees={options.assignees} params={params} />
+      <TimeLogsFilters clients={options.clients} projects={options.projects} assignees={options.assignees} params={params} />
 
       <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm">
@@ -108,7 +110,6 @@ export default async function TimeLogsReportPage({
                   <thead className="text-left text-xs uppercase text-gs-gray">
                     <tr>
                       <th className="whitespace-nowrap px-4 py-2">Task</th>
-                      <th className="whitespace-nowrap px-4 py-2">Client</th>
                       <th className="whitespace-nowrap px-4 py-2">Project</th>
                       <th className="whitespace-nowrap px-4 py-2">Time Logged</th>
                     </tr>
@@ -124,8 +125,10 @@ export default async function TimeLogsReportPage({
                             {t.taskName}
                           </Link>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2 text-gs-gray">{t.clientName}</td>
-                        <td className="whitespace-nowrap px-4 py-2 text-gs-gray">{t.projectName}</td>
+                        <td className="px-4 py-2">
+                          <span className="block font-medium text-gs-black/80">{t.projectName}</span>
+                          <span className="block text-xs text-gs-gray">{t.clientName}</span>
+                        </td>
                         <td className="whitespace-nowrap px-4 py-2 text-gs-gray">{formatDuration(t.totalSeconds)}</td>
                       </tr>
                     ))}

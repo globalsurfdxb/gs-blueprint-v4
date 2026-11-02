@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import {
@@ -52,243 +53,237 @@ export default async function NewProjectPage() {
     }));
 
   return (
-    <div className="page-sm">
-      <PageHeader
-        title="New Project"
-      />
+    <div>
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm text-gs-gray">
+        <Link href="/projects" className="hover:text-gs-black hover:underline">
+          Projects
+        </Link>
+        <span aria-hidden>/</span>
+        <span className="font-medium text-gs-black/70">New project</span>
+      </nav>
+      <PageHeader title="New Project" description="Set up the project once; Leads, tasks and sprints are added afterwards." />
 
-      <ActionForm
-        action={createProject}
-        successMessage="Project created."
-        className="mt-6 flex flex-col gap-4 rounded-lg border border-gs-gray/15 bg-white p-6"
-      >
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-medium">Project Name</label>
-          <input
-            id="name"
-            name="name"
-            required
-            placeholder="e.g. Inno SEO"
-            className="field"
-          />
-          <p className="text-xs text-gs-gray">
-            Convention: Client + Service Type (each service line is its own project).
-          </p>
-        </div>
+      <ActionForm action={createProject} successMessage="Project created." className="mt-6">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+          <div className="flex min-w-0 flex-col gap-6">
+            <Section title="Project details" description="What the project is and who it is for.">
+              <Field label="Project Name" htmlFor="name" required hint="Convention: Client + Service Type (each service line is its own project).">
+                <input id="name" name="name" required placeholder="e.g. Inno SEO" className="field" />
+              </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="clientId" className="text-sm font-medium">Client</label>
-          <Select
-            id="clientId"
-            name="clientId"
-            required
-            className="field"
-          >
-            <option value="" disabled>Select a client</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </Select>
-        </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Client" htmlFor="clientId" required>
+                  <Select id="clientId" name="clientId" required className="field">
+                    <option value="" disabled>Select a client</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Service Type" htmlFor="serviceTypeId" required>
+                  <Select id="serviceTypeId" name="serviceTypeId" required className="field">
+                    <option value="" disabled>Select a service type</option>
+                    {serviceTypes.map((st) => (
+                      <option key={st.id} value={st.id}>{st.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Cluster" htmlFor="clusterId" required>
+                  <Select
+                    id="clusterId"
+                    name="clusterId"
+                    required
+                    defaultValue={clusters.length === 1 ? clusters[0].id : undefined}
+                    className="field"
+                  >
+                    {clusters.length !== 1 && <option value="" disabled>Select a cluster</option>}
+                    {clusters.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Status" htmlFor="status">
+                  <Select id="status" name="status" defaultValue="PLANNING" className="field">
+                    <option value="PLANNING">Planning</option>
+                    <option value="ACTIVE">Active</option>
+                    <option value="PAUSED">Paused</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </Select>
+                </Field>
+              </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="serviceTypeId" className="text-sm font-medium">Service Type</label>
-          <Select
-            id="serviceTypeId"
-            name="serviceTypeId"
-            required
-            className="field"
-          >
-            <option value="" disabled>Select a service type</option>
-            {serviceTypes.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </Select>
-        </div>
+              <Field label="Reference Number" htmlFor="referenceNumber" optional hint="Invoice / PO / proposal — free text.">
+                <input id="referenceNumber" name="referenceNumber" className="field" />
+              </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="clusterId" className="text-sm font-medium">Cluster</label>
-          <Select
-            id="clusterId"
-            name="clusterId"
-            required
-            defaultValue={clusters.length === 1 ? clusters[0].id : undefined}
-            className="field"
-          >
-            {clusters.length !== 1 && <option value="" disabled>Select a cluster</option>}
-            {clusters.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </Select>
-        </div>
+              <Field label="Summary" htmlFor="summary" optional>
+                <textarea
+                  id="summary"
+                  name="summary"
+                  rows={3}
+                  placeholder="What is this project for, at a glance..."
+                  className="field"
+                />
+              </Field>
+            </Section>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="status" className="text-sm font-medium">Status</label>
-          <Select
-            id="status"
-            name="status"
-            defaultValue="PLANNING"
-            className="field"
-          >
-            <option value="PLANNING">Planning</option>
-            <option value="ACTIVE">Active</option>
-            <option value="PAUSED">Paused</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-          </Select>
-        </div>
+            <Section title="Schedule & hours" description="Dates and the hours budget the team works within.">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Start Date" htmlFor="startDate">
+                  <input id="startDate" name="startDate" type="date" className="field" />
+                </Field>
+                <Field label="Deadline" htmlFor="deadline">
+                  <input id="deadline" name="deadline" type="date" className="field" />
+                </Field>
+              </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="referenceNumber" className="text-sm font-medium">
-            Reference Number <span className="text-gs-gray">(invoice / PO / proposal — free text)</span>
-          </label>
-          <input
-            id="referenceNumber"
-            name="referenceNumber"
-            className="field"
-          />
-        </div>
+              <div className="flex flex-col gap-2">
+                <span className="text-[13px] font-medium text-gs-black/80">
+                  Max Allocated Hours <span className="font-normal text-gs-gray">(optional)</span>
+                </span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-gs-gray/25 p-3 text-sm has-[:checked]:border-gs-red has-[:checked]:bg-gs-red/5">
+                    <input type="radio" name="hoursAllocationType" value="ONE_TIME" defaultChecked className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">One-time</span>
+                      <span className="block text-xs text-gs-gray">Total hours for the whole project</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-gs-gray/25 p-3 text-sm has-[:checked]:border-gs-red has-[:checked]:bg-gs-red/5">
+                    <input type="radio" name="hoursAllocationType" value="MONTHLY" className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">Monthly</span>
+                      <span className="block text-xs text-gs-gray">Retainer, e.g. SEO / Social</span>
+                    </span>
+                  </label>
+                </div>
+                <input
+                  id="maxAllocatedHours"
+                  name="maxAllocatedHours"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  placeholder="Hours"
+                  aria-label="Max allocated hours"
+                  className="field sm:max-w-48"
+                />
+                <p className="text-xs text-gs-gray">Visible to the assigned Lead — flags retainer over-servicing risk.</p>
+              </div>
+            </Section>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="summary" className="text-sm font-medium">
-            Summary <span className="text-gs-gray">(optional)</span>
-          </label>
-          <textarea
-            id="summary"
-            name="summary"
-            rows={3}
-            placeholder="What is this project for, at a glance..."
-            className="field"
-          />
-        </div>
-
-        <OneDriveLinksField />
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="startDate" className="text-sm font-medium">Start Date</label>
-            <input
-              id="startDate"
-              name="startDate"
-              type="date"
-              className="field"
-            />
+            <Section title="Reference links" description="Shared documentation the whole team can open.">
+              <OneDriveLinksField />
+            </Section>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="deadline" className="text-sm font-medium">Deadline</label>
-            <input
-              id="deadline"
-              name="deadline"
-              type="date"
-              className="field"
-            />
-          </div>
+
+          <aside className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-20">
+            {canSetExtras ? (
+              <Section title="Team" description="Optional now — all of this can be changed from the project page.">
+                <Field
+                  label="Account Manager"
+                  htmlFor="accountManagerId"
+                  optional
+                  hint="Account/Client Services users in the Project Delivery & Client Services cluster."
+                >
+                  <Select id="accountManagerId" name="accountManagerId" defaultValue="" className="field">
+                    <option value="">Unassigned</option>
+                    {accountManagers.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field
+                  label="Dependency Tracker"
+                  htmlFor="dependencyTrackerId"
+                  optional
+                  hint="View-only coordinator for this project's cross-group-linked tasks."
+                >
+                  <Select id="dependencyTrackerId" name="dependencyTrackerId" defaultValue="" className="field">
+                    <option value="">Unassigned</option>
+                    {dependencyTrackers.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-medium text-gs-black/80">Discipline Task Groups</span>
+                  <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto rounded-lg border border-gs-gray/25 p-1.5">
+                    {leadOptions.length === 0 && <p className="p-2 text-sm text-gs-gray">No one holds a Lead role yet.</p>}
+                    {leadOptions.map((l) => (
+                      <label key={l.id} className="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-gs-light">
+                        <input type="checkbox" name="leadRoleIds" value={l.id} className="mt-0.5" />
+                        <span>{l.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gs-gray">
+                    Attaching a Lead creates their discipline&apos;s Task Group (e.g. an SEO Lead plus a separate Design Lead).
+                  </p>
+                </div>
+              </Section>
+            ) : (
+              <Section title="Team">
+                <p className="text-sm text-gs-gray">
+                  The owning Cluster Head attaches discipline Leads and assigns an Account Manager after intake.
+                </p>
+              </Section>
+            )}
+          </aside>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="maxAllocatedHours" className="text-sm font-medium">
-            Max Allocated Hours <span className="text-gs-gray">(optional)</span>
-          </label>
-          <div className="flex gap-4 text-sm">
-            <label className="flex items-center gap-1.5">
-              <input type="radio" name="hoursAllocationType" value="ONE_TIME" defaultChecked />
-              One-Time (total for project)
-            </label>
-            <label className="flex items-center gap-1.5">
-              <input type="radio" name="hoursAllocationType" value="MONTHLY" />
-              Monthly (retainer, e.g. SEO / Social)
-            </label>
-          </div>
-          <input
-            id="maxAllocatedHours"
-            name="maxAllocatedHours"
-            type="number"
-            min="0"
-            step="0.5"
-            className="field"
-          />
-          <p className="text-xs text-gs-gray">Visible to the assigned Lead — flags retainer over-servicing risk.</p>
+        {/* Stays in view while you scroll the form. */}
+        <div className="sticky bottom-4 z-10 mt-6 flex items-center justify-end gap-2 rounded-xl border border-gs-gray/15 bg-white/95 px-4 py-3 shadow-md backdrop-blur">
+          <Link href="/projects" className="btn btn-secondary">
+            Cancel
+          </Link>
+          <SubmitButton pendingLabel="Creating…" className="btn btn-primary min-w-36">
+            Create Project
+          </SubmitButton>
         </div>
-
-        {canSetExtras && (
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="accountManagerId" className="text-sm font-medium">
-              Account Manager <span className="text-gs-gray">(optional)</span>
-            </label>
-            <Select
-              id="accountManagerId"
-              name="accountManagerId"
-              defaultValue=""
-              className="field"
-            >
-              <option value="">Unassigned</option>
-              {accountManagers.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </Select>
-            <p className="text-xs text-gs-gray">
-              Restricted to Account/Client Services users in the Project Delivery &amp; Client Services cluster.
-            </p>
-          </div>
-        )}
-
-        {canSetExtras && (
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="dependencyTrackerId" className="text-sm font-medium">
-              Dependency Tracker <span className="text-gs-gray">(optional)</span>
-            </label>
-            <Select
-              id="dependencyTrackerId"
-              name="dependencyTrackerId"
-              defaultValue=""
-              className="field"
-            >
-              <option value="">Unassigned</option>
-              {dependencyTrackers.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </Select>
-            <p className="text-xs text-gs-gray">
-              View-only coordinator — sees only this project&apos;s cross-group-linked tasks (predecessor/successor).
-              Can be changed later from the project page.
-            </p>
-          </div>
-        )}
-
-        {canSetExtras && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">Discipline Task Groups</span>
-            <div className="flex flex-col gap-1 rounded-md border border-gs-gray/30 p-3">
-              {leadOptions.length === 0 && (
-                <p className="text-sm text-gs-gray">No one holds a Lead role yet.</p>
-              )}
-              {leadOptions.map((l) => (
-                <label key={l.id} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="leadRoleIds" value={l.id} />
-                  {l.label}
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-gs-gray">
-              Optional at creation — attaching a Lead creates their discipline&apos;s Task Group (e.g. an SEO
-              Lead plus a separate Design Lead). More can be attached later from the project page.
-            </p>
-          </div>
-        )}
-
-        {!canSetExtras && (
-          <p className="text-xs text-gs-gray">
-            The owning Cluster Head attaches discipline Leads and assigns an Account Manager after intake.
-          </p>
-        )}
-
-        <SubmitButton
-          pendingLabel="Creating…"
-          className="btn btn-primary mt-2 self-start"
-        >
-          Create Project
-        </SubmitButton>
       </ActionForm>
+    </div>
+  );
+}
+
+/** A titled card that groups related fields. */
+function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-gs-gray/10 bg-white p-5 shadow-sm md:p-6">
+      <h2 className="font-heading text-base font-semibold tracking-tight">{title}</h2>
+      {description && <p className="mt-0.5 text-sm text-gs-gray">{description}</p>}
+      <div className="mt-5 flex flex-col gap-5">{children}</div>
+    </section>
+  );
+}
+
+/** One labelled field: required star / "(optional)" marker, and a hint line underneath. */
+function Field({
+  label,
+  htmlFor,
+  required,
+  optional,
+  hint,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  required?: boolean;
+  optional?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={htmlFor} className="text-[13px] font-medium text-gs-black/80">
+        {label}
+        {required && <span className="text-gs-red"> *</span>}
+        {optional && <span className="font-normal text-gs-gray"> (optional)</span>}
+      </label>
+      {children}
+      {hint && <p className="text-xs text-gs-gray">{hint}</p>}
     </div>
   );
 }
