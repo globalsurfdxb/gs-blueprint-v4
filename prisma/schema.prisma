@@ -304,6 +304,7 @@ model Project {
   serviceType         ServiceType          @relation(fields: [serviceTypeId], references: [id])
   clusterId           String               @map("cluster_id")
   cluster             Cluster              @relation(fields: [clusterId], references: [id])
+  dealLink            String?              @map("deal_link") // CRM deal URL; required when a project is created, Admin-only to see
   referenceNumber     String?              @map("reference_number") // free text, no format/uniqueness enforced — PRD v1.1 decision
   summary             String?
   startDate           DateTime?            @map("start_date")

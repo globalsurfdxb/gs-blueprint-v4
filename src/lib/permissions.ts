@@ -184,14 +184,28 @@ export function canManageClients(user: CurrentUser) {
 
 const DELIVERY_CLUSTER_NAME = "Project Delivery & Client Services";
 const ACCOUNT_SERVICES_CLUSTER_NAME = DELIVERY_CLUSTER_NAME;
+const MARKETING_CLUSTER_NAME = "Marketing & Strategy";
 
 /**
  * Does this person have a personal "My Tasks" list? Account Managers (cluster-scoped
  * Account/Client Services) oversee projects rather than being assigned work, so the My Tasks
- * module is not part of their access — nor is it for the delivery cluster's Cluster Head.
+ * module is not part of their access — nor is it for the Cluster Heads of the delivery and
+ * Marketing & Strategy clusters, who oversee their teams from the dashboard instead.
  */
 export function hasPersonalTaskList(user: CurrentUser) {
-  return !isAnyAccountClientServices(user) && !isDeliveryClusterHeadOnly(user);
+  return !isAnyAccountClientServices(user) && !isDeliveryClusterHeadOnly(user) && !isMarketingClusterHead(user);
+}
+
+/**
+ * A Cluster Head of "Marketing & Strategy" (e.g. the Marketing and Social Media heads): an oversight role, so no
+ * personal "My Tasks" list. Unlike the delivery Cluster Head they keep the Content Calendar. An Admin who also holds
+ * the role keeps everything.
+ */
+export function isMarketingClusterHead(user: CurrentUser) {
+  return (
+    !isAdmin(user) &&
+    user.roles.some((r) => r.role === "CLUSTER_HEAD" && r.cluster?.name === MARKETING_CLUSTER_NAME)
+  );
 }
 
 /**
@@ -221,16 +235,12 @@ export function canCreateProject(user: CurrentUser) {
 }
 
 /**
- * Broader than creation: Cluster Head keeps the ability to edit projects already in their
- * cluster — pod-restricted (see "ROLE CHANGE — Pod-Restricted Cluster Head") to projects
- * that already have a Task Group in their pod.
+ * Editing a project's own record (name, cluster, dates, Deal Link, Reference Number, status…) is Admin-only.
+ * Cluster Heads and Account Managers still manage what hangs off a project — Task Groups, milestones, links —
+ * through their own permissions; they just no longer change the record itself.
  */
-export function canEditProjectInCluster(user: CurrentUser, project: ProjectWithGroups) {
-  return (
-    isAdmin(user) ||
-    clusterHeadReachesProject(user, project) ||
-    isAccountClientServicesFor(user, project.clusterId)
-  );
+export function canEditProjectInCluster(user: CurrentUser, _project: ProjectWithGroups) {
+  return isAdmin(user);
 }
 
 /**

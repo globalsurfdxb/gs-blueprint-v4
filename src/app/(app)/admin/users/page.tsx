@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
+import { Pagination, pageWindow, PAGE_SIZE } from "@/components/pagination";
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Admin",
@@ -17,16 +18,22 @@ const ROLE_LABELS: Record<string, string> = {
 // A route handler (file download), not a page — a plain <a>, not <Link>, so the browser downloads it.
 const EXPORT_HREF = "/admin/users/export";
 
-export default async function UsersPage() {
+export default async function UsersPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const currentUser = await getCurrentUser();
   if (!currentUser || !isAdmin(currentUser)) {
     redirect("/");
   }
 
+  const sp = await searchParams;
+  const total = await prisma.user.count();
+  const pg = pageWindow(total, sp.page);
   const users = await prisma.user.findMany({
     include: { roles: { include: { cluster: true, pod: true } } },
     orderBy: { name: "asc" },
+    skip: pg.skip,
+    take: PAGE_SIZE,
   });
+  const pageHref = (n: number) => (n > 1 ? `/admin/users?page=${n}` : "/admin/users");
 
   return (
     <div>
@@ -105,6 +112,7 @@ export default async function UsersPage() {
             </tbody>
           </table>
         </div>
+        <Pagination page={pg.page} pages={pg.pages} total={pg.total} pageSize={pg.pageSize} hrefFor={pageHref} noun="users" />
       </div>
     </div>
   );

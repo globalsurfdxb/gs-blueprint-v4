@@ -44,6 +44,7 @@ import {
 import { ArchiveProjectButton } from "./archive-project-button";
 import { DeleteProjectForm } from "./delete-project-form";
 import { DeleteProjectDialog } from "../delete-project-dialog";
+import { CopyLinkButton } from "@/components/copy-link-button";
 import { UnarchiveProjectButton } from "../unarchive-project-button";
 import {
   addProjectAttachment,
@@ -242,8 +243,9 @@ export default async function ProjectDetailPage({
   // read oversight into the Content/Design tasks it generates on this same project.
   const socialMediaOversight = await isProjectSocialMediaLead(user, project.id);
 
-  const [serviceTypes, accountManagers, dependencyTrackers, allLeadRoles, topLevelTasks, timeLogs, runningLogs] = await Promise.all([
+  const [serviceTypes, clusterOptions, accountManagers, dependencyTrackers, allLeadRoles, topLevelTasks, timeLogs, runningLogs] = await Promise.all([
     prisma.serviceType.findMany({ orderBy: { name: "asc" } }),
+    isAdmin(user) ? prisma.cluster.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
     getEligibleAccountManagers(),
     getEligibleDependencyTrackers(),
     canAttachGroups
@@ -663,13 +665,29 @@ export default async function ProjectDetailPage({
                 <span className="rounded-md bg-gs-black/5 px-2 py-1 font-medium text-gs-black/75">{project.client.name}</span>
                 <span className="rounded-md bg-gs-black/5 px-2 py-1 text-gs-gray">{project.cluster.name}</span>
                 <span className="rounded-md bg-gs-black/5 px-2 py-1 text-gs-gray">{project.serviceType.name}</span>
-                {project.referenceNumber && (
+                {isAdmin(user) && project.dealLink && (
+                  <a
+                    href={project.dealLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-md bg-gs-red/10 px-2 py-1 font-medium text-gs-red hover:bg-gs-red/15"
+                  >
+                    Deal link ↗
+                  </a>
+                )}
+                {isAdmin(user) && project.referenceNumber && (
                   <span className="rounded-md bg-gs-black/5 px-2 py-1 tabular-nums text-gs-gray">Ref {project.referenceNumber}</span>
                 )}
               </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <CopyLinkButton path={`/projects/${project.id}`} noun="project" className="btn btn-secondary" />
+            {isAdmin(user) && (
+              <Link href={`/projects/${project.id}?tab=overview#edit-project`} className="btn btn-secondary">
+                Edit project
+              </Link>
+            )}
             {canSeeProjectTotal && (
               <Link href={`/projects/${project.id}/report`} className="btn btn-secondary">
                 Core Project/Task Report
@@ -688,15 +706,15 @@ export default async function ProjectDetailPage({
 
         <dl className="grid grid-cols-2 border-t border-gs-gray/10 sm:grid-cols-4 [&>div]:px-5 [&>div]:py-3.5 md:[&>div]:px-6 [&>div:not(:first-child)]:border-gs-gray/10 sm:[&>div:not(:first-child)]:border-l">
           <div>
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Start date</dt>
+            <dd className="mt-1 font-heading text-base font-semibold">{project.startDate ? formatDate(project.startDate) : "—"}</dd>
+          </div>
+          <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Deadline</dt>
             <dd className={`mt-1 font-heading text-base font-semibold ${deadlinePassed ? "text-gs-red" : ""}`}>
               {project.deadline ? formatDate(project.deadline) : "—"}
               {deadlinePassed && <span className="ml-1.5 text-xs font-medium">Overdue</span>}
             </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Start date</dt>
-            <dd className="mt-1 font-heading text-base font-semibold">{project.startDate ? formatDate(project.startDate) : "—"}</dd>
           </div>
           <div>
             <dt className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Tasks</dt>
@@ -843,11 +861,12 @@ export default async function ProjectDetailPage({
 
           {/* Constrained narrower than the page itself — short form fields/labels stretching
               to the full table width below would read as ungrounded, not "denser". */}
-          <div className="mt-6 max-w-2xl">
+          <div id="edit-project" className="mt-6 max-w-2xl scroll-mt-24">
             {canEdit ? (
               <ProjectEditForm
                 action={updateProjectWithId}
                 serviceTypes={serviceTypes}
+                clusters={clusterOptions}
                 accountManagers={accountManagers}
                 dependencyTrackers={dependencyTrackers}
                 defaults={{ ...project, accountManagerName: project.accountManager?.name ?? null, dependencyTrackerName: project.dependencyTracker?.name ?? null }}
@@ -858,7 +877,6 @@ export default async function ProjectDetailPage({
             ) : (
               <div className="flex flex-col gap-2 rounded-lg border border-gs-gray/15 bg-white p-6 text-sm">
                 <p><span className="text-gs-gray">Service Type:</span> {project.serviceType.name}</p>
-                <p><span className="text-gs-gray">Reference Number:</span> {project.referenceNumber ?? "—"}</p>
                 <p><span className="text-gs-gray">Status:</span> {project.status}</p>
                 {project.summary && (
                   <p><span className="text-gs-gray">Summary:</span> {project.summary}</p>

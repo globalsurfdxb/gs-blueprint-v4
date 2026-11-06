@@ -3,10 +3,13 @@ import { SaveButton } from "@/components/save-button";
 import { Select } from "@/components/select";
 
 type ServiceType = { id: string; name: string };
+type ClusterOption = { id: string; name: string };
 type AccountManager = { id: string; name: string };
 type ProjectDefaults = {
   name: string;
   serviceTypeId: string;
+  clusterId: string;
+  dealLink: string | null;
   referenceNumber: string | null;
   summary: string | null;
   startDate: Date | null;
@@ -35,6 +38,7 @@ function toDateInputValue(date: Date | null) {
 export function ProjectEditForm({
   action,
   serviceTypes,
+  clusters,
   accountManagers,
   dependencyTrackers,
   defaults,
@@ -44,6 +48,7 @@ export function ProjectEditForm({
 }: {
   action: (formData: FormData) => void;
   serviceTypes: ServiceType[];
+  clusters: ClusterOption[];
   accountManagers: AccountManager[];
   dependencyTrackers: AccountManager[];
   defaults: ProjectDefaults;
@@ -76,6 +81,28 @@ export function ProjectEditForm({
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </Select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="clusterId" className="text-sm font-medium">Cluster</label>
+        <Select id="clusterId" name="clusterId" defaultValue={defaults.clusterId} className="field">
+          {clusters.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </Select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="dealLink" className="text-sm font-medium">Deal Link</label>
+        <input
+          id="dealLink"
+          name="dealLink"
+          type="url"
+          placeholder="https://…"
+          defaultValue={defaults.dealLink ?? ""}
+          className="field"
+        />
+        <p className="text-xs text-gs-gray">Only Admins can see the Deal Link and Reference Number.</p>
       </div>
 
       <div className="flex flex-col gap-1.5">

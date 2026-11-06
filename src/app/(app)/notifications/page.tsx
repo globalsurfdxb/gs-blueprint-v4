@@ -22,10 +22,21 @@ export default async function NotificationsPage({ searchParams }: { searchParams
 
   const all = await prisma.notification.findMany({
     where: { userId: user.id, NOT: RESOLVED_REMINDER },
-    include: { relatedTask: { select: { assignedToId: true, assignedTo: { select: { name: true } } } } },
+    include: { relatedTask: { select: { projectId: true, assignedToId: true, assignedTo: { select: { name: true } } } } },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
+
+  // Name the project on every notification: its own project id, or the one its task belongs to.
+  const projectIdOf = (n: (typeof all)[number]) => n.relatedProjectId ?? n.relatedTask?.projectId ?? null;
+  const projectIds = Array.from(new Set(all.map(projectIdOf).filter((id): id is string => !!id)));
+  const projects = projectIds.length
+    ? await prisma.project.findMany({
+        where: { id: { in: projectIds } },
+        select: { id: true, name: true, client: { select: { name: true } } },
+      })
+    : [];
+  const projectById = new Map(projects.map((p) => [p.id, p]));
 
   const isTeam = (n: (typeof all)[number]) => !!n.relatedTask?.assignedToId && n.relatedTask.assignedToId !== user.id;
   const mine = all.filter((n) => !isTeam(n));
@@ -85,8 +96,17 @@ export default async function NotificationsPage({ searchParams }: { searchParams
         {shown.map((n) => {
           const markReadWithId = markNotificationRead.bind(null, n.id);
           const assignee = n.relatedTask?.assignedTo?.name;
+          const pid = projectIdOf(n);
+          const project = pid ? projectById.get(pid) : undefined;
           const content = (
             <>
+              {project && (
+                <p className="mb-1 flex flex-wrap items-center gap-x-1.5 text-xs font-semibold uppercase tracking-wide text-gs-red">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-gs-red" />
+                  {project.name}
+                  <span className="font-medium normal-case tracking-normal text-gs-gray">· {project.client.name}</span>
+                </p>
+              )}
               <p className={n.isRead ? "text-gs-black" : "font-medium text-gs-black"}>{n.message}</p>
               <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-gs-gray">
                 <span>{formatDateTime(n.createdAt)}</span>

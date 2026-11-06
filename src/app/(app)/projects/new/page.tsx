@@ -113,6 +113,15 @@ export default async function NewProjectPage() {
                 </Field>
               </div>
 
+              <Field
+                label="Deal Link"
+                htmlFor="dealLink"
+                required
+                hint="The CRM deal for this project. Only Admins can see it afterwards."
+              >
+                <input id="dealLink" name="dealLink" type="url" required placeholder="https://…" className="field" />
+              </Field>
+
               <Field label="Reference Number" htmlFor="referenceNumber" optional hint="Invoice / PO / proposal — free text.">
                 <input id="referenceNumber" name="referenceNumber" className="field" />
               </Field>

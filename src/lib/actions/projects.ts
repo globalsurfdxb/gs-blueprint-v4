@@ -66,6 +66,11 @@ const createProjectSchema = z.object({
   clientId: z.string().min(1, "Client is required."),
   serviceTypeId: z.string().min(1, "Service type is required."),
   clusterId: z.string().min(1, "Cluster is required."),
+  dealLink: z
+    .string()
+    .trim()
+    .min(1, "Deal Link is required.")
+    .url("Deal Link must be a valid URL (starting with https://)."),
   referenceNumber: z.string().optional(),
   summary: z.string().optional(),
   startDate: z.string().optional(),
@@ -87,6 +92,7 @@ export async function createProject(formData: FormData) {
     clientId: formData.get("clientId"),
     serviceTypeId: formData.get("serviceTypeId"),
     clusterId: formData.get("clusterId"),
+    dealLink: formData.get("dealLink") ?? "",
     referenceNumber: formData.get("referenceNumber") || undefined,
     summary: formData.get("summary") || undefined,
     startDate: formData.get("startDate") || undefined,
@@ -140,6 +146,7 @@ export async function createProject(formData: FormData) {
       clientId: parsed.data.clientId,
       serviceTypeId: parsed.data.serviceTypeId,
       clusterId: parsed.data.clusterId,
+      dealLink: parsed.data.dealLink,
       referenceNumber: parsed.data.referenceNumber,
       summary: parsed.data.summary,
       startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : undefined,
@@ -181,6 +188,8 @@ export async function createProject(formData: FormData) {
 const updateProjectSchema = z.object({
   name: z.string().min(1, "Project name is required."),
   serviceTypeId: z.string().min(1, "Service type is required."),
+  clusterId: z.string().min(1, "Cluster is required."),
+  dealLink: z.union([z.literal(""), z.string().trim().url("Deal Link must be a valid URL (starting with https://).")]),
   referenceNumber: z.string().optional(),
   summary: z.string().optional(),
   startDate: z.string().optional(),
@@ -203,12 +212,14 @@ export async function updateProject(projectId: string, formData: FormData) {
   });
   if (!project) throw new Error("Project not found.");
   if (!canEditProjectInCluster(user, project)) {
-    throw new Error("You don't have permission to edit this project.");
+    throw new Error("Only an Admin can edit a project.");
   }
 
   const parsed = updateProjectSchema.safeParse({
     name: formData.get("name"),
     serviceTypeId: formData.get("serviceTypeId"),
+    clusterId: formData.get("clusterId"),
+    dealLink: String(formData.get("dealLink") ?? "").trim(),
     referenceNumber: formData.get("referenceNumber") || undefined,
     summary: formData.get("summary") || undefined,
     startDate: formData.get("startDate") || undefined,
@@ -228,6 +239,8 @@ export async function updateProject(projectId: string, formData: FormData) {
     data: {
       name: parsed.data.name,
       serviceTypeId: parsed.data.serviceTypeId,
+      clusterId: parsed.data.clusterId,
+      dealLink: parsed.data.dealLink || null,
       referenceNumber: parsed.data.referenceNumber,
       summary: parsed.data.summary || null,
       startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,

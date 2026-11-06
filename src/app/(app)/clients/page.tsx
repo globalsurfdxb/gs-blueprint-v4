@@ -4,8 +4,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { canManageClients, canCreateClient, canViewProject, isAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
+import { Pagination, paginate } from "@/components/pagination";
 
-export default async function ClientsPage() {
+export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   // Accountant can't manage existing clients, but still reaches this page to find the
@@ -15,7 +16,6 @@ export default async function ClientsPage() {
 
   const allClients = await prisma.client.findMany({
     include: {
-      accountOwner: true,
       _count: { select: { projects: true } },
       projects: { include: { taskGroups: { select: { id: true, leadUserId: true, podId: true } } } },
     },
@@ -32,6 +32,9 @@ export default async function ClientsPage() {
     }),
   );
   const clients = visible.filter((c): c is NonNullable<typeof c> => c !== null);
+  const sp = await searchParams;
+  const pg = paginate(clients, sp.page);
+  const pageHref = (n: number) => (n > 1 ? `/clients?page=${n}` : "/clients");
 
   return (
     <div>
@@ -56,20 +59,18 @@ export default async function ClientsPage() {
               <tr>
                 <th className="whitespace-nowrap px-4 py-3">Name</th>
                 <th className="whitespace-nowrap px-4 py-3">Industry</th>
-                <th className="whitespace-nowrap px-4 py-3">Contact</th>
-                <th className="whitespace-nowrap px-4 py-3">Account Owner</th>
                 <th className="whitespace-nowrap px-4 py-3">Projects</th>
               </tr>
             </thead>
             <tbody>
               {clients.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-gs-gray">
+                  <td colSpan={3} className="px-4 py-6 text-center text-gs-gray">
                     No clients yet.
                   </td>
                 </tr>
               )}
-              {clients.map((c) => (
+              {pg.slice.map((c) => (
                 <tr key={c.id} className="border-t border-gs-gray/10">
                   <td className="whitespace-nowrap px-4 py-3">
                     <Link href={`/clients/${c.id}`} className="font-medium hover:underline">
@@ -77,17 +78,13 @@ export default async function ClientsPage() {
                     </Link>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{c.industry ?? "—"}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-gs-gray">
-                    {c.contactPerson ?? "—"}
-                    {c.contactEmail ? ` · ${c.contactEmail}` : ""}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{c.accountOwner?.name ?? "—"}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{c._count.projects}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <Pagination page={pg.page} pages={pg.pages} total={pg.total} pageSize={pg.pageSize} hrefFor={pageHref} noun="clients" />
       </div>
     </div>
   );

@@ -10,6 +10,8 @@ import { ProjectStatusChip, projectStatusLabel } from "@/components/status-chip"
 import { PageHeader } from "@/components/page-header";
 import { UnarchiveProjectButton } from "./unarchive-project-button";
 import { DeleteProjectDialog } from "./delete-project-dialog";
+import { CopyLinkButton } from "@/components/copy-link-button";
+import { Pagination, paginate } from "@/components/pagination";
 import { AutoFilterForm } from "@/components/auto-filter-form";
 import { Select } from "@/components/select";
 
@@ -27,6 +29,7 @@ export default async function ProjectsPage({
     cluster?: string;
     deadline?: string;
     sort?: string;
+    page?: string;
   }>;
 }) {
   const user = await getCurrentUser();
@@ -114,7 +117,7 @@ export default async function ProjectsPage({
         (!needle ||
           p.name.toLowerCase().includes(needle) ||
           p.client.name.toLowerCase().includes(needle) ||
-          (p.referenceNumber ?? "").toLowerCase().includes(needle)),
+          (admin && (p.referenceNumber ?? "").toLowerCase().includes(needle))),
     )
     .sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name);
@@ -132,6 +135,23 @@ export default async function ProjectsPage({
   const presentStatuses = STATUS_ORDER.filter((s) => counts.has(s));
 
   const canCreateAnywhere = canCreateProject(user);
+
+  const pg = paginate(filtered, sp.page);
+  // Page links keep every active filter and the sort.
+  const pageHref = (n: number) => {
+    const params = new URLSearchParams();
+    if (showArchived) params.set("archived", "1");
+    if (statusFilter) params.set("status", statusFilter);
+    if (q) params.set("q", q);
+    if (clientFilter) params.set("client", clientFilter);
+    if (serviceFilter) params.set("service", serviceFilter);
+    if (clusterFilter) params.set("cluster", clusterFilter);
+    if (deadlineFilter) params.set("deadline", deadlineFilter);
+    if (sort !== "newest") params.set("sort", sort);
+    if (n > 1) params.set("page", String(n));
+    const qs = params.toString();
+    return qs ? `/projects?${qs}` : "/projects";
+  };
 
   const filtersActive =
     !!statusFilter || !!q || !!clientFilter || !!serviceFilter || !!clusterFilter || !!deadlineFilter;
@@ -190,7 +210,7 @@ export default async function ProjectsPage({
               name="q"
               type="search"
               defaultValue={q}
-              placeholder="Search name, client or reference…"
+              placeholder={admin ? "Search name, client or reference…" : "Search name or client…"}
               autoComplete="off"
               className="field field-sm w-full pl-9"
             />
@@ -289,7 +309,7 @@ export default async function ProjectsPage({
                 <th className="whitespace-nowrap px-4 py-3">Deadline</th>
                 <th className="whitespace-nowrap px-4 py-3">Status</th>
                 {showArchived && <th className="whitespace-nowrap px-4 py-3"></th>}
-                <th className="w-24 px-3 py-3" aria-hidden></th>
+                <th className="w-32 px-3 py-3" aria-hidden></th>
               </tr>
             </thead>
             <tbody>
@@ -317,7 +337,7 @@ export default async function ProjectsPage({
                   </td>
                 </tr>
               )}
-              {filtered.map((p) => {
+              {pg.slice.map((p) => {
                 const overdue =
                   !!p.deadline && p.deadline < now && p.status !== "COMPLETED" && p.status !== "CANCELLED";
                 return (
@@ -326,7 +346,7 @@ export default async function ProjectsPage({
                       <Link href={`/projects/${p.id}`} className="font-semibold text-gs-black hover:text-gs-red hover:underline">
                         {p.name}
                       </Link>
-                      {p.referenceNumber && <p className="mt-0.5 text-xs tabular-nums text-gs-gray">{p.referenceNumber}</p>}
+                      {admin && p.referenceNumber && <p className="mt-0.5 text-xs tabular-nums text-gs-gray">{p.referenceNumber}</p>}
                     </td>
                     <td className="px-4 py-4 text-gs-black/80">{p.client.name}</td>
                     <td className="whitespace-nowrap px-4 py-4">
@@ -354,6 +374,12 @@ export default async function ProjectsPage({
                     )}
                     <td className="whitespace-nowrap px-3 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <CopyLinkButton
+                          path={`/projects/${p.id}`}
+                          noun="project"
+                          iconOnly
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gs-gray/70 transition-colors hover:bg-gs-black/5 hover:text-gs-black"
+                        />
                         {admin && <DeleteProjectDialog projectName={p.name} action={deleteProject.bind(null, p.id)} />}
                         <span aria-hidden className="text-gs-gray/50">›</span>
                       </div>
@@ -364,6 +390,7 @@ export default async function ProjectsPage({
             </tbody>
           </table>
         </div>
+        <Pagination page={pg.page} pages={pg.pages} total={pg.total} pageSize={pg.pageSize} hrefFor={pageHref} noun="projects" />
       </div>
     </div>
   );
