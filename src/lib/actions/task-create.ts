@@ -61,7 +61,7 @@ const projectInclude = {
 /**
  * Projects the current user may create a task in — for the drawer's Project picker. Only projects
  * the user is actually attached to appear (QA B-01): Admin sees all; a Lead/Account Manager/Cluster
- * Head sees the projects they lead or oversee; a Contributor sees the projects they have work on.
+ * Head sees the projects they lead or oversee; a Contributor sees the projects they have work on or were added to.
  */
 export async function getCreatableProjects(opts: { bugsOnly?: boolean } = {}) {
   return runAction(async () => {
@@ -74,16 +74,13 @@ export async function getCreatableProjects(opts: { bugsOnly?: boolean } = {}) {
       orderBy: { name: "asc" },
     });
 
-    // Projects where this user has at least one task assigned — the Contributor's "assigned" set.
-    const workedOn = new Set(
-      (
-        await prisma.task.findMany({
-          where: { assignedToId: user.id },
-          select: { projectId: true },
-          distinct: ["projectId"],
-        })
-      ).map((t) => t.projectId),
-    );
+    // The Contributor's "assigned" set: projects where they have a task assigned, plus projects a Lead / Cluster
+    // Head / Admin added them to as part of the project team.
+    const [assignedTasks, teamMemberships] = await Promise.all([
+      prisma.task.findMany({ where: { assignedToId: user.id }, select: { projectId: true }, distinct: ["projectId"] }),
+      prisma.projectMember.findMany({ where: { userId: user.id }, select: { projectId: true } }),
+    ]);
+    const workedOn = new Set([...assignedTasks, ...teamMemberships].map((t) => t.projectId));
 
     return projects
       .filter(
