@@ -33,6 +33,8 @@ export type CreateGroupOption = {
   // choice, so the client shows it read-only.
   assignees: CreateAssignee[];
   assigneeLocked: boolean;
+  /** A Contributor creating their own task: it is always theirs, so the form never asks who it is for. */
+  selfAssigned: boolean;
   sprints: { id: string; name: string; status: string }[];
 };
 
@@ -168,6 +170,7 @@ async function loadTaskCreateOptions(projectId: string): Promise<TaskCreateOptio
       canManageSprint: canPlaceInSprint,
       assignees,
       assigneeLocked,
+      selfAssigned: !privileged,
       sprints: canPlaceInSprint ? sprints : [],
     });
   }

@@ -248,6 +248,7 @@ function CreateForm({
               leadId={selectedGroup.leadId}
               leadName={selectedGroup.leadName}
               bugTrackingEnabled={selectedGroup.bugTrackingEnabled}
+              selfAssigneeId={selectedGroup.selfAssigned ? selectedGroup.assignees[0]?.id : undefined}
             />
 
             {!bugMode && selectedGroup.canManageSprint && (

@@ -17,14 +17,26 @@ export function AssigneeField({
   leadId,
   leadName,
   bugTrackingEnabled,
+  selfAssigneeId,
 }: {
   assignees: { id: string; name: string }[];
   leadId: string;
   leadName: string;
   bugTrackingEnabled: boolean;
+  /** Set when a Contributor is creating their own task: no choice to make, so no picker. */
+  selfAssigneeId?: string;
 }) {
   const { taskType } = useTaskType();
   const isBug = bugTrackingEnabled && taskType === "BUG";
+
+  if (selfAssigneeId) {
+    return (
+      <>
+        <input type="hidden" name="assignedToId" value={selfAssigneeId} />
+        <p className="text-xs text-gs-gray">This task will be assigned to you.</p>
+      </>
+    );
+  }
 
   if (isBug) {
     return (
