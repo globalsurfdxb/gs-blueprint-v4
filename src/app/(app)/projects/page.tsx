@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LinkRow } from "@/components/link-row";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { canCreateProject, canViewProject, hidesCompletedProjects, isAdmin } from "@/lib/permissions";
+import { canCreateProject, canManageProjectTeam, canViewProject, hidesCompletedProjects, isAdmin } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import { deleteProject, unarchiveProject } from "@/lib/actions/projects";
@@ -10,6 +10,7 @@ import { ProjectStatusChip, projectStatusLabel } from "@/components/status-chip"
 import { PageHeader } from "@/components/page-header";
 import { UnarchiveProjectButton } from "./unarchive-project-button";
 import { DeleteProjectDialog } from "./delete-project-dialog";
+import { ProjectTeamDialog } from "./project-team-dialog";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { Pagination, paginate } from "@/components/pagination";
 import { AutoFilterForm } from "@/components/auto-filter-form";
@@ -309,7 +310,7 @@ export default async function ProjectsPage({
                 <th className="whitespace-nowrap px-4 py-3">Deadline</th>
                 <th className="whitespace-nowrap px-4 py-3">Status</th>
                 {showArchived && <th className="whitespace-nowrap px-4 py-3"></th>}
-                <th className="w-32 px-3 py-3" aria-hidden></th>
+                <th className="w-40 px-3 py-3" aria-hidden></th>
               </tr>
             </thead>
             <tbody>
@@ -374,6 +375,7 @@ export default async function ProjectsPage({
                     )}
                     <td className="whitespace-nowrap px-3 py-4 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {!showArchived && canManageProjectTeam(user, p) && <ProjectTeamDialog projectId={p.id} projectName={p.name} />}
                         <CopyLinkButton
                           path={`/projects/${p.id}`}
                           noun="project"

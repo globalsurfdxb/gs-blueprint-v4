@@ -289,6 +289,8 @@ export async function deleteUser(
     prisma.userRolePod.deleteMany({ where: { userRoleId: { in: user.roles.map((r) => r.id) } } }),
     prisma.userRole.deleteMany({ where: { userId } }),
     prisma.taskGroup.updateMany({ where: { addedById: userId }, data: { addedById: null } }),
+    prisma.projectMember.deleteMany({ where: { userId } }),
+    prisma.projectMember.updateMany({ where: { addedById: userId }, data: { addedById: null } }),
     prisma.notification.deleteMany({ where: { userId } }),
     prisma.user.delete({ where: { id: userId } }),
   ]);
@@ -360,6 +362,10 @@ export async function reassignAndDeleteUser(
       await tx.studioTicket.updateMany({ where: { assignedStudioUserId: userId }, data: { assignedStudioUserId: targetId } });
       await tx.client.updateMany({ where: { accountOwnerId: userId }, data: { accountOwnerId: targetId } });
       await tx.cluster.updateMany({ where: { clusterHeadId: userId }, data: { clusterHeadId: targetId } });
+
+      // Team memberships belong to the person, not the work: drop theirs, keep the ones they added.
+      await tx.projectMember.deleteMany({ where: { userId } });
+      await tx.projectMember.updateMany({ where: { addedById: userId }, data: { addedById: targetId } });
 
       await tx.notification.deleteMany({ where: { userId } });
       await tx.userRolePod.deleteMany({ where: { userRoleId: { in: user.roles.map((r) => r.id) } } });

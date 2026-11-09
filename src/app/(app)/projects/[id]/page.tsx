@@ -22,6 +22,7 @@ import {
   canAssignBugToBugSprint,
   canSetTeamCapacity,
   canManageMilestones,
+  canManageProjectTeam,
   getEligibleAccountManagers,
   getEligibleDependencyTrackers,
   isAdmin,
@@ -45,6 +46,7 @@ import { ArchiveProjectButton } from "./archive-project-button";
 import { DeleteProjectForm } from "./delete-project-form";
 import { DeleteProjectDialog } from "../delete-project-dialog";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { ProjectTeamDialog } from "../project-team-dialog";
 import { UnarchiveProjectButton } from "../unarchive-project-button";
 import {
   addProjectAttachment,
@@ -683,6 +685,9 @@ export default async function ProjectDetailPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <CopyLinkButton path={`/projects/${project.id}`} noun="project" className="btn btn-secondary" />
+            {!project.archivedAt && canManageProjectTeam(user, project) && (
+              <ProjectTeamDialog variant="button" projectId={project.id} projectName={project.name} />
+            )}
             {isAdmin(user) && (
               <Link href={`/projects/${project.id}?tab=overview#edit-project`} className="btn btn-secondary">
                 Edit project

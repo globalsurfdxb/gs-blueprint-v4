@@ -259,6 +259,14 @@ export function canManageMilestones(user: CurrentUser, project: ProjectWithGroup
 }
 
 /**
+ * Who may add people to / remove people from a project's team: the same tier as managing its milestones — Admin,
+ * the project's Cluster Head, its Account Manager, and any Lead attached to it.
+ */
+export function canManageProjectTeam(user: CurrentUser, project: ProjectWithGroups) {
+  return canManageMilestones(user, project);
+}
+
+/**
  * Attaching/removing discipline Task Groups is provisioning, not delivery work — Admin,
  * the project's home-cluster Cluster Head, or Account/Client Services for that cluster.
  * A Lead never attaches a new discipline to a project unilaterally. Presence-only gate:
@@ -385,6 +393,13 @@ export async function canViewProject(user: CurrentUser, project: ProjectWithGrou
     select: { id: true },
   });
   if (ownTaskOnProject) return true;
+
+  // ...or if a Lead / Cluster Head / Admin added them to the project's team.
+  const onProjectTeam = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId: project.id, userId: user.id } },
+    select: { id: true },
+  });
+  if (onProjectTeam) return true;
 
   return hasOpenStudioTicketAccess(user, project.id);
 }

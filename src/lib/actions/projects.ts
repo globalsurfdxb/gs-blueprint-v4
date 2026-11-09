@@ -436,6 +436,7 @@ export async function deleteProject(
       await tx.monthlyBrief.deleteMany({ where: { projectId } });
       await tx.projectAttachment.deleteMany({ where: { projectId } });
       await tx.milestone.deleteMany({ where: { projectId } });
+      await tx.projectMember.deleteMany({ where: { projectId } });
       await tx.taskGroup.deleteMany({ where: { projectId } });
       await tx.project.delete({ where: { id: projectId } });
     },
