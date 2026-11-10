@@ -4,10 +4,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import { getBugAccess } from "@/lib/bug-access";
+import { canManageBugSprints } from "@/lib/permissions";
 import { ENVIRONMENT_LABELS, SEVERITY_LABELS, statusLabel } from "@/lib/bug";
 import { daysOverdue } from "@/lib/timezone";
 import { PageHeader } from "@/components/page-header";
 import { AutoFilterForm } from "@/components/auto-filter-form";
+import { NewBugSprintPanel } from "./new-bug-sprint-panel";
 import { Select } from "@/components/select";
 import { EmptyState, SectionCard } from "@/components/dashboard-ui";
 import { TaskStatusChip } from "@/components/task-chips";
@@ -86,7 +88,10 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
     orderBy: [{ dueDate: "asc" }, { name: "asc" }],
   });
 
-  const allBugSprints = bugSprintsRaw.filter((sp) => fullViewProjectIds.has(sp.projectId) || all.some((b) => b.bugSprintId === sp.id));
+  // Added to the project's team: all of its bug sprints too.
+  const allBugSprints = bugSprintsRaw.filter(
+    (sp) => fullViewProjectIds.has(sp.projectId) || access.teamProjectIds.has(sp.projectId) || all.some((b) => b.bugSprintId === sp.id),
+  );
 
   // ---- filter options from what this person can see ----
   // Every project this person has bug access on — not just those that already have a bug they can see —
@@ -95,6 +100,17 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
     where: { id: { in: accessProjectIds }, archivedAt: null },
     select: { id: true, name: true, client: { select: { name: true } } },
   });
+  // Projects where this person may create bug sprints (the bug-tracking Lead, Cluster Head, Admin).
+  const manageable = await prisma.project.findMany({
+    where: { id: { in: accessProjectIds }, archivedAt: null },
+    include: { taskGroups: { include: { pod: { select: { name: true, bugTrackingEnabled: true } } } } },
+  });
+  const manageableBugSprintProjects = manageable
+    .filter((pr) =>
+      canManageBugSprints(user, pr, pr.taskGroups.filter((g) => g.pod?.bugTrackingEnabled)),
+    )
+    .map((pr) => ({ id: pr.id, name: pr.name, clientName: accessProjects.find((a) => a.id === pr.id)?.client.name ?? "" }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const projectOptions = accessProjects
     .map((pr) => [pr.id, `${pr.name} · ${pr.client.name}`] as [string, string])
     .sort((a, b) => a[1].localeCompare(b[1]));
@@ -373,7 +389,9 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
         actions={<ReportBugButton />}
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <NewBugSprintPanel projects={manageableBugSprintProjects} />
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {summary.map((s) => (
           <div key={s.label} className="relative overflow-hidden rounded-xl border border-gs-gray/10 bg-white px-4 py-3.5 shadow-sm">
             <span

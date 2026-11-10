@@ -180,11 +180,12 @@ export async function getSprintProgressData(user: CurrentUser): Promise<SprintPr
 /**
  * Projects whose sprints this person should see in the "Sprints" menu: every Sprint-enabled
  * project in their oversight scope (Admin / Cluster Head / the Lead who owns the group), plus any
- * project where they hold a task in a Sprint-enabled discipline (a Contributor's own sprint work).
+ * project where they hold a task in a Sprint-enabled discipline (a Contributor's own sprint work) or were added to
+ * the project's team.
  * Empty = the Sprints menu item is hidden.
  */
 export async function getSprintProjectIds(user: CurrentUser): Promise<string[]> {
-  const [groups, ownTasks] = await Promise.all([
+  const [groups, ownTasks, memberships] = await Promise.all([
     prisma.taskGroup.findMany({
       where: { pod: { sprintWorkflowEnabled: true }, project: { archivedAt: null } },
       select: {
@@ -203,9 +204,13 @@ export async function getSprintProjectIds(user: CurrentUser): Promise<string[]> 
       select: { projectId: true },
       distinct: ["projectId"],
     }),
+    // Projects they were added to as part of the project team.
+    prisma.projectMember.findMany({ where: { userId: user.id }, select: { projectId: true } }),
   ]);
   const ids = new Set(groups.filter((g) => groupInScope(user, g)).map((g) => g.project.id));
   for (const t of ownTasks) ids.add(t.projectId);
+  const sprintProjects = new Set(groups.map((g) => g.project.id));
+  for (const m of memberships) if (sprintProjects.has(m.projectId)) ids.add(m.projectId);
   return Array.from(ids);
 }
 
@@ -273,7 +278,7 @@ export type SprintListRow = {
  * their own, counted from their own tasks — never other people's sprints or work. */
 export async function getSprintList(projectIds: string[], user: CurrentUser): Promise<SprintListRow[]> {
   if (projectIds.length === 0) return [];
-  const [allSprints, groups] = await Promise.all([
+  const [allSprints, groups, memberships] = await Promise.all([
     prisma.sprint.findMany({
       where: { projectId: { in: projectIds } },
       include: { project: { select: { name: true, client: { select: { name: true } } } } },
@@ -282,10 +287,13 @@ export async function getSprintList(projectIds: string[], user: CurrentUser): Pr
       where: { projectId: { in: projectIds }, pod: { sprintWorkflowEnabled: true } },
       select: { leadUserId: true, clusterId: true, podId: true, project: { select: { id: true, clusterId: true } } },
     }),
+    prisma.projectMember.findMany({ where: { userId: user.id, projectId: { in: projectIds } }, select: { projectId: true } }),
   ]);
-  const overseen = new Set(
-    user.restrictToOwnTasks ? [] : groups.filter((g) => groupInScope(user, g)).map((g) => g.project.id),
-  );
+  // Oversight, or added to the project's team: the whole project's sprints, with the project's real progress.
+  const overseen = new Set([
+    ...(user.restrictToOwnTasks ? [] : groups.filter((g) => groupInScope(user, g)).map((g) => g.project.id)),
+    ...memberships.map((m) => m.projectId),
+  ]);
   const limitedIds = allSprints.filter((s) => !overseen.has(s.projectId)).map((s) => s.id);
   const ownCounts = await countSprintTasks(limitedIds, user.id);
   const sprints = allSprints.filter((s) => overseen.has(s.projectId) || (ownCounts.get(s.id)?.total ?? 0) > 0);

@@ -44,6 +44,7 @@ async function assertNameFree(projectId: string, name: string, exceptId?: string
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/bugs");
 }
 
 export async function createBugSprint(projectId: string, formData: FormData) {

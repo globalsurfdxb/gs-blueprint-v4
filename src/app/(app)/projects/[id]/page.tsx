@@ -369,6 +369,11 @@ export default async function ProjectDetailPage({
   // surfaced to them (to create/hand off into it) even when its existing tasks stay
   // hidden beyond their own.
   const canCreateAnywhere = canCreateTaskInGroup(user, project);
+  // Added to this project's team: sees its Sprints and Bugs even when their own pod isn't one of its groups.
+  const isTeamMember = !!(await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId: project.id, userId: user.id } },
+    select: { id: true },
+  }));
   const groupCards = project.taskGroups
     .map((group) => {
       const tasks = tasksByGroupId.get(group.id) ?? [];
@@ -382,7 +387,8 @@ export default async function ProjectDetailPage({
       const hasOwnTask = tasks.some(isOwnTask);
       // A Contributor may self-create in a group that belongs to their own pod (PRD 8.2).
       const canSelfCreateHere = canSelfCreateInGroup(user, group);
-      const visible = canSeeAllTasks || hasOwnTask || canCreateAnywhere || canSelfCreateHere;
+      const teamSeesGroup = isTeamMember && !!(group.pod?.sprintWorkflowEnabled || group.pod?.bugTrackingEnabled);
+      const visible = canSeeAllTasks || hasOwnTask || canCreateAnywhere || canSelfCreateHere || teamSeesGroup;
       const shownTasks = canSeeAllTasks ? tasks : tasks.filter(isOwnTask);
       return {
         group,
@@ -407,7 +413,7 @@ export default async function ProjectDetailPage({
   const visibleTopLevelTasks = groupCards.flatMap((c) => c.shownTasks);
   const visibleSprintIds = new Set(
     sprints
-      .filter((sp) => seesAllSprintTasks || visibleTopLevelTasks.some((t) => t.sprintId === sp.id))
+      .filter((sp) => seesAllSprintTasks || isTeamMember || visibleTopLevelTasks.some((t) => t.sprintId === sp.id))
       .map((sp) => sp.id),
   );
   const visibleSprintsByRelevance = sprintsByRelevance.filter((sp) => visibleSprintIds.has(sp.id));
@@ -521,7 +527,7 @@ export default async function ProjectDetailPage({
   }
   // Same rule as Sprints: unless the viewer sees every bug on a Bug-Tracking team, only bug sprints that hold
   // a bug they can see are listed.
-  const seesAllBugs = bugGroupCards.some((c) => c.canSeeAll);
+  const seesAllBugs = isTeamMember || bugGroupCards.some((c) => c.canSeeAll);
   const bugSprintRows: BugSprintRow[] = bugSprints
     .filter((b) => seesAllBugs || (bugRowsRaw[b.id] ?? []).length > 0)
     .map((b) => {
@@ -605,7 +611,9 @@ export default async function ProjectDetailPage({
           podId: g.podId,
           project: { clusterId: project.clusterId },
         }) || canSelfCreateInGroup(user, g),
-    ) || visibleTopLevelTasks.some((t) => t.sprintId !== null);
+    ) ||
+    isTeamMember ||
+    visibleTopLevelTasks.some((t) => t.sprintId !== null);
   const showSprintsTab = hasSprintWorkflow && sprintViewer;
 
   // Sprints and Bugs get their own tabs, shown only when the project has the matching discipline AND the viewer
@@ -820,7 +828,7 @@ export default async function ProjectDetailPage({
             )}
             sprints={visibleSprintsByRelevance.map((sp) => {
               const timing = sprintTiming(sp);
-              const counts = seesAllSprintTasks
+              const counts = seesAllSprintTasks || isTeamMember
                 ? sprintCountsFor(sprintCounts, sp.id)
                 : bugCountsOf(visibleTopLevelTasks.filter((t) => t.sprintId === sp.id));
               return {
@@ -831,7 +839,7 @@ export default async function ProjectDetailPage({
                 endLabel: formatDate(sp.endDate),
                 startInput: sp.startDate.toISOString().slice(0, 10),
                 endInput: sp.endDate.toISOString().slice(0, 10),
-                taskCount: seesAllSprintTasks ? sp._count.tasks : counts.total,
+                taskCount: seesAllSprintTasks || isTeamMember ? sp._count.tasks : counts.total,
                 datesLocked: sp.status !== "PLANNED",
                 counts,
                 timingLabel: timing.label,

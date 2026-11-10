@@ -19,10 +19,13 @@ export type BugAccess = {
   groupIds: string[];
   /** The subset where they see every bug rather than only their own. */
   fullViewGroupIds: Set<string>;
+  /** Projects they were added to as part of the project team — they see all of those projects' bug sprints. */
+  teamProjectIds: Set<string>;
 };
 
 export async function getBugAccess(user: CurrentUser): Promise<BugAccess> {
-  const groups = await prisma.taskGroup.findMany({
+  const [groups, memberships] = await Promise.all([
+    prisma.taskGroup.findMany({
     where: { pod: { bugTrackingEnabled: true }, project: { archivedAt: null } },
     select: {
       id: true,
@@ -31,7 +34,10 @@ export async function getBugAccess(user: CurrentUser): Promise<BugAccess> {
       podId: true,
       project: { select: { id: true, clusterId: true } },
     },
-  });
+  }),
+    prisma.projectMember.findMany({ where: { userId: user.id }, select: { projectId: true } }),
+  ]);
+  const teamProjectIds = new Set(memberships.map((m) => m.projectId));
 
   const groupIds: string[] = [];
   const fullViewGroupIds = new Set<string>();
@@ -41,9 +47,10 @@ export async function getBugAccess(user: CurrentUser): Promise<BugAccess> {
     if (oversees) {
       groupIds.push(g.id);
       fullViewGroupIds.add(g.id);
-    } else if (isMember) {
+    } else if (isMember || teamProjectIds.has(g.project.id)) {
+      // On the discipline's team, or added to the project: sees their own bugs there.
       groupIds.push(g.id);
     }
   }
-  return { groupIds, fullViewGroupIds };
+  return { groupIds, fullViewGroupIds, teamProjectIds };
 }
