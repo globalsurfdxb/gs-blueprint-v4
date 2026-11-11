@@ -66,6 +66,21 @@ function RunningTimerPill({ timer }: { timer: RunningTimer }) {
     return () => clearInterval(id);
   }, [timer.startedAtMs]);
 
+  // Show the running time in the browser tab's title too ("⏱ 12:34 · Page title"), so it is visible from other tabs.
+  // The prefix is re-applied every second, which also survives Next.js rewriting the title on navigation.
+  useEffect(() => {
+    if (elapsed <= 0) return;
+    const prefixed = /^⏱ [\d:]+ · /;
+    const base = document.title.replace(prefixed, "");
+    document.title = `⏱ ${elapsedLabel(elapsed)} · ${base}`;
+  }, [elapsed]);
+  useEffect(
+    () => () => {
+      document.title = document.title.replace(/^⏱ [\d:]+ · /, "");
+    },
+    [],
+  );
+
   return (
     <Link
       href={`/projects/${timer.projectId}/tasks/${timer.taskId}`}

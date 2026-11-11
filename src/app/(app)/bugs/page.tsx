@@ -4,12 +4,14 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import { getBugAccess } from "@/lib/bug-access";
-import { canManageBugSprints } from "@/lib/permissions";
+import { canAssignAnyoneInGroup, canManageBugSprints } from "@/lib/permissions";
+import { getGroupAssigneePool } from "@/lib/task-assignment";
 import { ENVIRONMENT_LABELS, SEVERITY_LABELS, statusLabel } from "@/lib/bug";
 import { daysOverdue } from "@/lib/timezone";
 import { PageHeader } from "@/components/page-header";
 import { AutoFilterForm } from "@/components/auto-filter-form";
 import { NewBugSprintPanel } from "./new-bug-sprint-panel";
+import { BugSelect, BugSelectAll, BulkAssignProvider } from "./bulk-assign";
 import { Select } from "@/components/select";
 import { EmptyState, SectionCard } from "@/components/dashboard-ui";
 import { TaskStatusChip } from "@/components/task-chips";
@@ -65,6 +67,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
       assignedTo: { select: { id: true, name: true, location: true } },
       createdBy: { select: { id: true, name: true } },
       bugSprint: { select: { id: true, name: true, dueDate: true } },
+      page: { select: { name: true, url: true } },
     },
   });
 
@@ -92,6 +95,21 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
   const allBugSprints = bugSprintsRaw.filter(
     (sp) => fullViewProjectIds.has(sp.projectId) || access.teamProjectIds.has(sp.projectId) || all.some((b) => b.bugSprintId === sp.id),
   );
+
+  // Bulk assign: open bugs on teams this person leads (or any, as Admin), and the people those teams can hand them to.
+  const leadGroups = await prisma.taskGroup.findMany({
+    where: { id: { in: access.groupIds } },
+    select: { id: true, leadUserId: true, podId: true, clusterId: true, project: { select: { clusterId: true } } },
+  });
+  const assignableGroups = leadGroups.filter((g) => canAssignAnyoneInGroup(user, g));
+  const assignableGroupIds = new Set(assignableGroups.map((g) => g.id));
+  const assignPools = await Promise.all(assignableGroups.map((g) => getGroupAssigneePool(g, g.project.clusterId)));
+  const bulkAssignees = Array.from(new Map(assignPools.flat().map((u) => [u.id, u])).values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  const canBulkAssign = bulkAssignees.length > 0;
+  const isAssignable = (b: { groupId: string | null; status: string }) =>
+    canBulkAssign && b.groupId !== null && assignableGroupIds.has(b.groupId) && b.status !== "COMPLETED";
 
   // ---- filter options from what this person can see ----
   // Every project this person has bug access on — not just those that already have a bug they can see —
@@ -183,11 +201,11 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
 
   // ---- summary chips over everything visible (independent of the filters) ----
   const count = (f: (b: (typeof all)[number]) => boolean) => all.filter(f).length;
-  const summary = [
-    { label: "Open", n: count((b) => b.status === "NEW"), tone: "" },
-    { label: "In progress", n: count((b) => b.status === "IN_PROGRESS"), tone: "" },
-    { label: "Ready for retest", n: count((b) => b.status === "REVIEW"), tone: count((b) => b.status === "REVIEW") > 0 ? "text-violet-600" : "" },
-    { label: "Reopened before", n: count((b) => b.revisionCount > 0 && b.status !== "COMPLETED"), tone: count((b) => b.revisionCount > 0 && b.status !== "COMPLETED") > 0 ? "text-gs-red" : "" },
+  const summary: { label: string; n: number; tone: string; href?: string; on?: boolean }[] = [
+    { label: "Open", n: count((b) => b.status === "NEW"), tone: "", href: "/bugs?status=NEW", on: status === "NEW" },
+    { label: "In progress", n: count((b) => b.status === "IN_PROGRESS"), tone: "", href: "/bugs?status=IN_PROGRESS", on: status === "IN_PROGRESS" },
+    { label: "Ready for retest", n: count((b) => b.status === "REVIEW"), tone: count((b) => b.status === "REVIEW") > 0 ? "text-violet-600" : "", href: "/bugs?status=REVIEW", on: status === "REVIEW" },
+    { label: "Reopened before", n: count((b) => b.revisionCount > 0 && b.status !== "COMPLETED"), tone: count((b) => b.revisionCount > 0 && b.status !== "COMPLETED") > 0 ? "text-gs-red" : "", href: "/bugs?reopened=1", on: reopened },
     { label: "Critical / high", n: count((b) => b.status !== "COMPLETED" && (b.severity === "CRITICAL" || b.severity === "HIGH")), tone: count((b) => b.status !== "COMPLETED" && (b.severity === "CRITICAL" || b.severity === "HIGH")) > 0 ? "text-gs-red" : "" },
   ];
 
@@ -386,24 +404,42 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
       <PageHeader
         title="Bugs"
         description={<>Bugs reported and fixed by your team, across every project.</>}
-        actions={<ReportBugButton />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <NewBugSprintPanel projects={manageableBugSprintProjects} />
+            <ReportBugButton />
+          </div>
+        }
       />
 
-      <NewBugSprintPanel projects={manageableBugSprintProjects} />
-
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {summary.map((s) => (
-          <div key={s.label} className="relative overflow-hidden rounded-xl border border-gs-gray/10 bg-white px-4 py-3.5 shadow-sm">
-            <span
-              aria-hidden
-              className={`absolute inset-y-0 left-0 w-1 ${
-                s.tone.includes("red") ? "bg-gs-red" : s.tone.includes("violet") ? "bg-violet-500" : "bg-gs-gray/25"
-              }`}
-            />
-            <p className="text-xs font-medium text-gs-gray">{s.label}</p>
-            <p className={`mt-1 font-heading text-2xl font-bold tabular-nums ${s.tone}`}>{s.n}</p>
-          </div>
-        ))}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {summary.map((s) => {
+          const accent = s.tone.includes("red") ? "bg-gs-red" : s.tone.includes("violet") ? "bg-violet-500" : "bg-gs-gray/25";
+          const body = (
+            <>
+              <span aria-hidden className={`absolute inset-y-0 left-0 w-1 ${accent}`} />
+              <p className="text-xs font-medium text-gs-gray">{s.label}</p>
+              <p className={`mt-1 font-heading text-2xl font-bold tabular-nums ${s.tone}`}>{s.n}</p>
+            </>
+          );
+          const cls = `relative block overflow-hidden rounded-xl border bg-white px-4 py-3.5 shadow-sm ${
+            s.on ? "border-gs-black/30 ring-1 ring-gs-black/10" : "border-gs-gray/10"
+          }`;
+          return s.href ? (
+            <Link
+              key={s.label}
+              href={s.href}
+              aria-current={s.on ? "true" : undefined}
+              className={`${cls} transition hover:-translate-y-0.5 hover:shadow-md`}
+            >
+              {body}
+            </Link>
+          ) : (
+            <div key={s.label} className={cls}>
+              {body}
+            </div>
+          );
+        })}
       </div>
 
       {/* Filter bar — applies as you change it (search waits for a short pause). */}
@@ -523,6 +559,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
         </div>
       </AutoFilterForm>
 
+      <BulkAssignProvider assignees={bulkAssignees}>
       <div className="mt-6">
         {show === "sprints" ? (
           byProject.length === 0 ? (
@@ -570,6 +607,11 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                     <table className="w-full min-w-[860px] text-sm">
                       <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
                         <tr>
+                          {canBulkAssign && (
+                            <th className="w-10 px-4 py-2">
+                              <BugSelectAll ids={g.bugs.filter(isAssignable).map((b) => b.id)} />
+                            </th>
+                          )}
                           <th className="whitespace-nowrap px-4 py-2">Bug</th>
                           <th className="whitespace-nowrap px-4 py-2">Severity</th>
                           <th className="whitespace-nowrap px-4 py-2">Bug sprint</th>
@@ -588,6 +630,9 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                               : daysOverdue(b.dueDate, b.assignedTo?.location ?? FALLBACK_LOCATION, now);
                           return (
                             <TaskRow key={b.id} taskId={b.id} projectId={b.projectId} className="border-t border-gs-gray/10">
+                              {canBulkAssign && (
+                                <td className="w-10 px-4 py-3">{isAssignable(b) && <BugSelect id={b.id} name={b.name} />}</td>
+                              )}
                               <td className="px-4 py-3">
                                 <TaskOpener
                                   taskId={b.id}
@@ -596,8 +641,12 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
                                 >
                                   {b.name}
                                 </TaskOpener>
-                                {b.environment && (
-                                  <p className="text-xs text-gs-gray">{ENVIRONMENT_LABELS[b.environment] ?? b.environment}</p>
+                                {(b.environment || b.page) && (
+                                  <p className="text-xs text-gs-gray">
+                                    {b.environment ? (ENVIRONMENT_LABELS[b.environment] ?? b.environment) : null}
+                                    {b.environment && b.page ? " · " : null}
+                                    {b.page ? <span title={b.page.url}>Page: {b.page.name}</span> : null}
+                                  </p>
                                 )}
                               </td>
                               <td className="whitespace-nowrap px-4 py-3">
@@ -665,6 +714,7 @@ export default async function BugsPage({ searchParams }: { searchParams: Promise
         </TaskViews>
         )}
       </div>
+      </BulkAssignProvider>
     </div>
     </TaskDrawerProvider>
   );

@@ -30,7 +30,11 @@ export function TimeLogsFilters({
   params: TimeLogParams;
 }) {
   const [period, setPeriod] = useState<TimeLogPeriod>(params.period);
-  const anyFilter = !!(params.clientId || params.projectId || params.assigneeId || params.period !== "month");
+  // The From / To calendars are always there: picking a date switches the period to a custom range, and picking a
+  // preset period clears them again.
+  const [from, setFrom] = useState(params.from);
+  const [to, setTo] = useState(params.to);
+  const anyFilter = !!(params.clientId || params.projectId || params.assigneeId || params.period !== "month" || params.from || params.to);
 
   return (
     <AutoFilterForm className="mt-6 overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
@@ -43,7 +47,7 @@ export function TimeLogsFilters({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-x-3 gap-y-3 border-t border-gs-gray/10 bg-gs-light/40 px-4 py-3.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-x-3 gap-y-3 border-t border-gs-gray/10 bg-gs-light/40 px-4 py-3.5 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))]">
         <label className="flex min-w-0 flex-col gap-1.5">
           <span className={labelClass}>Client</span>
           <Select name="clientId" defaultValue={params.clientId} className="field field-sm w-full">
@@ -76,7 +80,14 @@ export function TimeLogsFilters({
           <Select
             name="period"
             value={period}
-            onChange={(e) => setPeriod(e.target.value as TimeLogPeriod)}
+            onChange={(e) => {
+              const next = e.target.value as TimeLogPeriod;
+              setPeriod(next);
+              if (next !== "custom") {
+                setFrom("");
+                setTo("");
+              }
+            }}
             className="field field-sm w-full"
           >
             {PERIODS.map((p) => (
@@ -84,18 +95,34 @@ export function TimeLogsFilters({
             ))}
           </Select>
         </label>
-        {period === "custom" && (
-          <>
-            <label className="flex min-w-0 flex-col gap-1.5">
-              <span className={labelClass}>From</span>
-              <input type="date" name="from" defaultValue={params.from} className="field field-sm w-full" />
-            </label>
-            <label className="flex min-w-0 flex-col gap-1.5">
-              <span className={labelClass}>To</span>
-              <input type="date" name="to" defaultValue={params.to} className="field field-sm w-full" />
-            </label>
-          </>
-        )}
+        <label className="flex min-w-0 flex-col gap-1.5">
+          <span className={labelClass}>From date</span>
+          <input
+            type="date"
+            name="from"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => {
+              setFrom(e.target.value);
+              setPeriod("custom");
+            }}
+            className="field field-sm w-full"
+          />
+        </label>
+        <label className="flex min-w-0 flex-col gap-1.5">
+          <span className={labelClass}>To date</span>
+          <input
+            type="date"
+            name="to"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => {
+              setTo(e.target.value);
+              setPeriod("custom");
+            }}
+            className="field field-sm w-full"
+          />
+        </label>
       </div>
     </AutoFilterForm>
   );

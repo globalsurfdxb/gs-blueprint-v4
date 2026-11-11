@@ -125,6 +125,7 @@ export default async function TaskDetailPage({
         statusEvents: { include: { changedBy: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
         bugImages: { orderBy: { createdAt: "asc" } },
         sprint: { select: { id: true, name: true, status: true } },
+        page: { select: { name: true, url: true } },
       },
     }),
   ]);
@@ -337,6 +338,17 @@ export default async function TaskDetailPage({
         <dl className="mt-3 divide-y divide-gs-gray/10">
           <DetailRow label="Created by">{task.createdBy.name}</DetailRow>
           {isBug && <DetailRow label="Severity">{task.severity ? SEVERITY_LABELS[task.severity] : "—"}</DetailRow>}
+          {isBug && (
+            <DetailRow label="Page">
+              {task.page ? (
+                <a href={task.page.url} target="_blank" rel="noopener noreferrer" className="text-gs-red hover:underline" title={task.page.url}>
+                  {task.page.name} ↗
+                </a>
+              ) : (
+                <span className="font-normal text-gs-gray">—</span>
+              )}
+            </DetailRow>
+          )}
           {isBug && <DetailRow label="Environment">{task.environment ? ENVIRONMENT_LABELS[task.environment] : "—"}</DetailRow>}
           <DetailRow label={revisionCountLabel(task.taskType)}>
             <RevisionBadge count={task.revisionCount} />

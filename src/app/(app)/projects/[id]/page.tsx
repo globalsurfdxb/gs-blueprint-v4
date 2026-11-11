@@ -23,6 +23,7 @@ import {
   canSetTeamCapacity,
   canManageMilestones,
   canManageProjectTeam,
+  canManageProjectPages,
   getEligibleAccountManagers,
   getEligibleDependencyTrackers,
   isAdmin,
@@ -47,6 +48,8 @@ import { DeleteProjectForm } from "./delete-project-form";
 import { DeleteProjectDialog } from "../delete-project-dialog";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { ProjectTeamDialog } from "../project-team-dialog";
+import { ProjectPagesSection } from "./project-pages-section";
+import { addProjectPages, updateProjectPage, deleteProjectPage } from "@/lib/actions/project-pages";
 import { UnarchiveProjectButton } from "../unarchive-project-button";
 import {
   addProjectAttachment,
@@ -510,6 +513,15 @@ export default async function ProjectDetailPage({
   const hasBugTracking = bugGroupCards.length > 0;
   const bugGroupsAll = project.taskGroups.filter((g) => g.pod?.bugTrackingEnabled);
   const canManageBugSprintsHere = canManageBugSprints(user, project, bugGroupsAll);
+
+  // The project's site pages: managers add/edit them here; anyone reporting a bug can pick or add one.
+  const canManagePagesHere = canManageProjectPages(user, project);
+  const projectPages = await prisma.projectPage.findMany({
+    where: { projectId: project.id },
+    orderBy: { name: "asc" },
+    include: { createdBy: { select: { name: true } }, _count: { select: { tasks: true } } },
+  });
+  const showPagesTab = canManagePagesHere || projectPages.length > 0;
   const canReportBugHere = bugGroupCards.some((c) => c.canCreateTask);
   const bugSprints = hasBugTracking
     ? await prisma.bugSprint.findMany({ where: { projectId: project.id }, orderBy: [{ dueDate: "asc" }, { name: "asc" }] })
@@ -625,7 +637,9 @@ export default async function ProjectDetailPage({
         ? "sprints"
         : tabParam === "bugs" && hasBugTracking
           ? "bugs"
-          : "tasks";
+          : tabParam === "pages" && showPagesTab
+            ? "pages"
+            : "tasks";
   const taskCount = flatViewTasks.length;
   const deadlinePassed =
     !!project.deadline && project.deadline < now && project.status !== "COMPLETED" && project.status !== "CANCELLED";
@@ -637,6 +651,7 @@ export default async function ProjectDetailPage({
     ...(hasBugTracking
       ? [{ key: "bugs", label: "Bugs", href: `/projects/${project.id}?tab=bugs`, count: shownBugs.length }]
       : []),
+    ...(showPagesTab ? [{ key: "pages", label: "Pages", href: `/projects/${project.id}?tab=pages`, count: projectPages.length }] : []),
     { key: "overview", label: "Overview", href: `/projects/${project.id}?tab=overview`, count: undefined },
   ];
 
@@ -846,6 +861,16 @@ export default async function ProjectDetailPage({
                 timingTone: timing.tone,
               };
             })}
+          />
+        </div>
+      ) : activeTab === "pages" ? (
+        <div className="pt-5">
+          <ProjectPagesSection
+            pages={projectPages.map((p) => ({ id: p.id, name: p.name, url: p.url, bugCount: p._count.tasks, addedBy: p.createdBy.name }))}
+            canManage={canManagePagesHere}
+            addAction={addProjectPages.bind(null, project.id)}
+            updateAction={updateProjectPage}
+            deleteAction={deleteProjectPage}
           />
         </div>
       ) : activeTab === "bugs" ? (

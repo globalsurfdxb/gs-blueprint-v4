@@ -258,6 +258,11 @@ export function canManageMilestones(user: CurrentUser, project: ProjectWithGroup
   );
 }
 
+/** Managing a project's list of site pages (add, edit, remove): the same tier as milestones and the project team. */
+export function canManageProjectPages(user: CurrentUser, project: ProjectWithGroups) {
+  return canManageMilestones(user, project);
+}
+
 /**
  * Who may add people to / remove people from a project's team: the same tier as managing its milestones — Admin,
  * the project's Cluster Head, its Account Manager, and any Lead attached to it.

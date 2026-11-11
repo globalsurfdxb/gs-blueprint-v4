@@ -18,13 +18,6 @@ import {
 } from "@/lib/permissions";
 import { notifyUsers } from "@/lib/notifications";
 import { runAction } from "@/lib/run-action";
-import {
-  BLOB_NOT_READY_MESSAGE,
-  blobStorageReady,
-  imageFilesFrom,
-  prepareBugImages,
-  storeBugImages,
-} from "@/lib/bug-image-upload";
 
 const PRIORITY_VALUES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 const SEVERITY_VALUES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
@@ -48,6 +41,10 @@ const createTaskSchema = z.object({
   sprintId: z.string().optional(),
   // Bug sprint (category + due date) a bug is filed under — bugs only, optional.
   bugSprintId: z.string().optional(),
+  // The page of the project's site the bug was found on: an existing page, or a new one typed on the spot.
+  pageId: z.string().optional(),
+  newPageName: z.string().trim().max(120).optional(),
+  newPageUrl: z.string().trim().optional(),
 });
 
 // Single source of truth for task-creation rules (permissions, bug routing, sprint gating,
@@ -70,6 +67,9 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
     environment: formData.get("environment") || undefined,
     sprintId: formData.get("sprintId") || undefined,
     bugSprintId: formData.get("bugSprintId") || undefined,
+    pageId: formData.get("pageId") || undefined,
+    newPageName: formData.get("newPageName") || undefined,
+    newPageUrl: formData.get("newPageUrl") || undefined,
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
@@ -158,6 +158,32 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
     bugSprintDue = bugSprint.dueDate;
   }
 
+  // Page the bug was found on: an existing page of THIS project, or a new one (name + address) created now.
+  let pageId: string | null = null;
+  if (isBug && parsed.data.pageId) {
+    const page = await prisma.projectPage.findUnique({ where: { id: parsed.data.pageId }, select: { projectId: true } });
+    if (!page || page.projectId !== projectId) throw new Error("That page doesn't belong to this project.");
+    pageId = parsed.data.pageId;
+  } else if (isBug && (parsed.data.newPageName || parsed.data.newPageUrl)) {
+    const name = parsed.data.newPageName ?? "";
+    if (!name) throw new Error("Give the new page a name.");
+    if (!z.string().url().safeParse(parsed.data.newPageUrl ?? "").success) {
+      throw new Error("Enter the new page's full address, starting with https://");
+    }
+    const existing = await prisma.projectPage.findFirst({
+      where: { projectId, name: { equals: name, mode: "insensitive" } },
+      select: { id: true },
+    });
+    pageId = existing
+      ? existing.id
+      : (
+          await prisma.projectPage.create({
+            data: { projectId, name, url: parsed.data.newPageUrl as string, createdById: user.id },
+            select: { id: true },
+          })
+        ).id;
+  }
+
   // A bug reported without a priority / due date (the short "Report a bug" form): priority follows its
   // severity, and it is due with its bug sprint — or a week out when it isn't in one.
   const SEVERITY_PRIORITY = { CRITICAL: "URGENT", HIGH: "HIGH", MEDIUM: "MEDIUM", LOW: "LOW" } as const;
@@ -187,6 +213,7 @@ async function createTaskCore(projectId: string, formData: FormData): Promise<st
       environment: isBug ? parsed.data.environment : null,
       sprintId,
       bugSprintId,
+      pageId,
     },
   });
 
@@ -233,34 +260,29 @@ export async function createTaskInDrawer(projectId: string, formData: FormData) 
     const user = await getCurrentUser();
     if (!user) throw new Error("Your session has expired. Please sign in again.");
 
-    // Bug extras: up to 3 screenshots and/or a screenshot link. Checked BEFORE the bug is created, so
-    // a bad file or a missing storage setup stops the whole thing instead of leaving a half-made bug.
+    // Bug extras: any number of screenshot links, each with an optional name (parallel screenshotLink[] /
+    // screenshotLabel[] from the form). Checked BEFORE the bug is created, so a bad link stops the whole thing
+    // instead of leaving a half-made bug.
     const isBug = formData.get("taskType") === "BUG";
-    const files = isBug ? imageFilesFrom(formData) : [];
-    const rawLink = isBug ? String(formData.get("screenshotLink") ?? "").trim() : "";
-    if (rawLink && !z.string().url().safeParse(rawLink).success) {
-      throw new Error("The screenshot link isn't a valid URL (it should start with https://).");
+    const urls = isBug ? formData.getAll("screenshotLink").map(String) : [];
+    const labels = isBug ? formData.getAll("screenshotLabel").map(String) : [];
+    const links = urls
+      .map((url, i) => ({ url: url.trim(), label: (labels[i] ?? "").trim() }))
+      .filter((l) => l.url.length > 0);
+    for (const l of links) {
+      if (!z.string().url().safeParse(l.url).success) {
+        throw new Error(`"${l.url}" isn't a valid screenshot link (it should start with https://).`);
+      }
     }
-    const prepared = await prepareBugImages(files);
-    if (prepared.length > 0 && !blobStorageReady()) throw new Error(BLOB_NOT_READY_MESSAGE);
 
     const taskId = await createTaskCore(projectId, formData);
 
-    if (rawLink) {
-      await prisma.taskAttachment.create({
-        data: { taskId, url: rawLink, label: "Screenshot", addedById: user.id },
+    if (links.length > 0) {
+      await prisma.taskAttachment.createMany({
+        data: links.map((l) => ({ taskId, url: l.url, label: l.label || "Screenshot", addedById: user.id })),
       });
     }
-    // The bug exists now; if storing the files fails, keep the bug and say what didn't make it.
-    let notice: string | undefined;
-    if (prepared.length > 0) {
-      try {
-        await storeBugImages(taskId, user.id, prepared);
-      } catch (err) {
-        notice = `Bug reported, but the screenshots weren't saved: ${err instanceof Error ? err.message : "upload failed"} You can add them from the bug.`;
-      }
-    }
-    return { ok: true as const, notice };
+    return { ok: true as const };
   });
 }
 

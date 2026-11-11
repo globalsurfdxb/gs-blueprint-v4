@@ -71,6 +71,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
   const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
   const [commentText, setCommentText] = useState("");
+  const [tab, setTab] = useState<"overview" | "comments" | "subtasks" | "links">("overview");
   const [closing, setClosing] = useState(false); // slide-out in progress
   const closeTimer = useRef<number | null>(null);
   // Create mode (final build): the same slide-over, in create rather than edit form.
@@ -114,6 +115,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
       setTaskId(id);
       setData(null);
       setCommentText("");
+      setTab("overview");
       void load(id);
     },
     [load],
@@ -317,6 +319,39 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                   </div>
                 </div>
 
+                <div role="tablist" aria-label="Task sections" className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-gs-gray/15 px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {(
+                    [
+                      { key: "overview", label: "Overview", count: 0 },
+                      { key: "comments", label: "Comments", count: data.comments.length },
+                      ...(data.subtasks.length > 0 ? [{ key: "subtasks", label: "Subtasks", count: data.subtasks.length }] : []),
+                      ...(data.links.length > 0 ? [{ key: "links", label: "Links", count: data.links.length }] : []),
+                    ] as { key: "overview" | "comments" | "subtasks" | "links"; label: string; count: number }[]
+                  ).map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === t.key}
+                      onClick={() => setTab(t.key)}
+                      className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
+                        tab === t.key ? "border-gs-red text-gs-black" : "border-transparent text-gs-gray hover:text-gs-black"
+                      }`}
+                    >
+                      {t.label}
+                      {t.count > 0 && (
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                            tab === t.key ? "bg-gs-red/10 text-gs-red" : "bg-gs-light text-gs-gray"
+                          }`}
+                        >
+                          {t.count}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
                 <div className={`flex-1 overflow-y-auto px-6 py-5 transition-opacity ${pending || loading ? "opacity-60" : ""}`}>
                   {data.canTrackTime && (
                     <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-gs-gray/15 bg-gs-light/70 px-4 py-3">
@@ -358,6 +393,8 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                     </div>
                   )}
 
+                  {tab === "overview" && (
+                    <>
                   <div className="divide-y divide-gs-gray/10">
                 <Field label="Status">
                   {data.statusOptions.length > 1 ? (
@@ -474,8 +511,124 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
 
                   </div>
 
-                  {/* Comments — add + view inline; edit/delete stay in the full view. */}
+                  {/* Everything else about the task, read-only — so nothing needs the full page just to be read. */}
+                  {(data.description || data.stepsToReproduce) && (
+                    <div className="mt-6 flex flex-col gap-4 border-t border-gs-gray/10 pt-5">
+                      {data.description && (
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Description</p>
+                          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{data.description}</p>
+                        </div>
+                      )}
+                      {data.stepsToReproduce && (
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Steps to reproduce</p>
+                          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{data.stepsToReproduce}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {data.bugImages.length > 0 && (
+                    <div className="mt-6 border-t border-gs-gray/10 pt-5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Screenshots</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {data.bugImages.map((img) => (
+                          <a key={img.id} href={img.url} target="_blank" rel="noopener noreferrer" title={img.filename}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={img.url} alt={img.filename} className="h-20 w-28 rounded-md border border-gs-gray/20 object-cover hover:opacity-80" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-6 border-t border-gs-gray/10 pt-5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Details</p>
+                    <dl className="mt-2 divide-y divide-gs-gray/10 text-sm">
+                      {[
+                        ["Created by", data.createdByName],
+                        ["Created on", data.createdAtLabel],
+                        ["Due date", data.dueDateLabel],
+                        ...(data.environmentLabel ? [["Environment", data.environmentLabel]] : []),
+                        ...(data.taskType === "BUG" && data.page ? [["Page", `${data.page.name}`]] : []),
+                        ...(data.taskType === "BUG" ? [["Bug sprint", data.bugSprintName ?? "Not in a bug sprint"]] : []),
+                        ["Project", `${data.projectName} · ${data.clientName}`],
+                        ...(data.groupName ? [["Team", data.groupName]] : []),
+                        ["Time logged", data.loggedSeconds > 0 ? formatDuration(data.loggedSeconds) : "None yet"],
+                      ].map(([label, value]) => (
+                        <div key={label} className="flex items-start justify-between gap-4 py-2">
+                          <dt className="text-gs-gray">{label}</dt>
+                          <dd className="text-right font-medium">
+                            {label === "Page" && data.page ? (
+                              <a href={data.page.url} target="_blank" rel="noopener noreferrer" title={data.page.url} className="text-gs-red hover:underline">
+                                {value} ↗
+                              </a>
+                            ) : (
+                              value
+                            )}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+
+                    </>
+                  )}
+                  {tab === "links" && (
+                    <>
+                  {data.links.length > 0 && (
+                    <div className="">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Links · {data.links.length}</p>
+                      <ul className="mt-2 flex flex-col gap-1.5">
+                        {data.links.map((l) => (
+                          <li key={l.id}>
+                            <a
+                              href={l.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={l.url}
+                              className="block truncate rounded-md border border-gs-gray/15 px-3 py-2 text-sm font-medium text-gs-red hover:bg-gs-light"
+                            >
+                              {l.label || l.url}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                    </>
+                  )}
+                  {tab === "subtasks" && (
+                    <>
+                  {data.subtasks.length > 0 && (
+                    <div className="">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Subtasks · {data.subtasks.length}</p>
+                      <ul className="mt-2 flex flex-col gap-1.5">
+                        {data.subtasks.map((s) => (
+                          <li key={s.id}>
+                            <Link
+                              href={`/projects/${data.projectId}/tasks/${s.id}`}
+                              className="flex items-center justify-between gap-3 rounded-md border border-gs-gray/15 px-3 py-2 text-sm hover:bg-gs-light"
+                            >
+                              <span className="min-w-0 truncate font-medium">{s.name}</span>
+                              <span className="shrink-0 text-xs text-gs-gray">
+                                {s.assigneeName ?? "Unassigned"} · {s.statusLabel}
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                    </>
+                  )}
+                  {tab === "comments" && (
+                    <>
+                  {/* Comments — add + view inline; edit/delete stay in the full view. */}
+                  <div className="">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
                       Comments{data.comments.length > 0 ? ` · ${data.comments.length}` : ""}
                     </p>
@@ -511,11 +664,13 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                       </button>
                     </div>
                   </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between gap-3 border-t border-gs-gray/15 bg-white px-6 py-3.5">
                   <p className="text-[11px] leading-snug text-gs-gray">
-                    Subtasks, timer, handoff, bug images and content are in the full view.
+                    Edit links, add subtasks, hand off and see the full history in the full view.
                   </p>
                   <Link href={data.fullViewHref} className="btn btn-secondary btn-sm shrink-0">
                     Open full view ↗

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { SEVERITY_VALUES, SEVERITY_LABELS, ENVIRONMENT_VALUES, ENVIRONMENT_LABELS } from "@/lib/bug";
 import { Select } from "@/components/select";
 import type { TaskCreateOptions } from "@/lib/actions/task-create";
@@ -17,13 +18,23 @@ export function BugReportFields({
   leadId,
   leadName,
   bugSprints,
+  pages,
+  defaultPageId,
   initialBugSprintId,
 }: {
   leadId: string;
   leadName: string;
   bugSprints: TaskCreateOptions["bugSprints"];
+  pages: TaskCreateOptions["pages"];
+  defaultPageId: string | null;
   initialBugSprintId: string | null;
 }) {
+  // "" = no page, "__new__" = type a new page's name and address, otherwise an existing page's id.
+  const [pageChoice, setPageChoice] = useState<string>(() =>
+    defaultPageId && pages.some((p) => p.id === defaultPageId) ? defaultPageId : "",
+  );
+  const [linkRows, setLinkRows] = useState(1);
+
   return (
     <>
       <input type="hidden" name="taskType" value="BUG" />
@@ -53,6 +64,33 @@ export function BugReportFields({
             ))}
           </Select>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="bug-page" className={labelClass}>
+          Page <span className="font-normal text-gs-gray">(where did you see it?)</span>
+        </label>
+        <Select
+          id="bug-page"
+          value={pageChoice}
+          onChange={(e) => setPageChoice(e.target.value)}
+          // Only an existing page's id is sent under pageId; "new" is expressed by the name/address fields below.
+          name={pageChoice === "__new__" ? undefined : "pageId"}
+          className={fieldClass}
+        >
+          <option value="">No specific page</option>
+          {pages.map((p) => (
+            <option key={p.id} value={p.id} data-sub={p.url}>{p.name}</option>
+          ))}
+          <option value="__new__">+ Add a new page…</option>
+        </Select>
+        {pageChoice === "__new__" && (
+          <div className="mt-1 grid gap-2 rounded-lg border border-gs-gray/20 bg-gs-light/40 p-3 sm:grid-cols-2">
+            <input name="newPageName" required placeholder="Page name, e.g. Contact" aria-label="New page name" className={fieldClass} />
+            <input name="newPageUrl" type="url" required placeholder="https://…" aria-label="New page address" className={fieldClass} />
+            <p className="text-xs text-gs-gray sm:col-span-2">Saved to this project&apos;s pages, so the next bug can pick it.</p>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -89,30 +127,35 @@ export function BugReportFields({
         </div>
       )}
 
-      <details className="group rounded-lg border border-dashed border-gs-gray/35 bg-gs-light/40 px-4 py-3 text-sm open:border-solid open:bg-white">
-        <summary className="flex cursor-pointer list-none items-center gap-2 font-medium text-gs-gray hover:text-gs-black [&::-webkit-details-marker]:hidden">
-          <span aria-hidden className="text-base leading-none transition-transform group-open:rotate-45">＋</span>
-          Add screenshots or a link
-        </summary>
-        <div className="mt-3 flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="bugImages" className="text-xs font-medium">Screenshots</label>
+      <div className="flex flex-col gap-2">
+        <span className={labelClass}>
+          Screenshot links <span className="font-normal text-gs-gray">(optional)</span>
+        </span>
+        {Array.from({ length: linkRows }, (_, i) => (
+          <div key={i} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
             <input
-              id="bugImages"
-              type="file"
-              name="image"
-              multiple
-              accept="image/png,image/jpeg,image/webp"
-              className="text-xs file:mr-2 file:rounded-md file:border file:border-gs-gray/30 file:bg-gs-light file:px-3 file:py-1.5 file:text-xs file:font-medium"
+              name="screenshotLabel"
+              aria-label={`Screenshot name ${i + 1}`}
+              placeholder="Name (optional)"
+              className={fieldClass}
             />
-            <p className="text-xs text-gs-gray">PNG, JPG or WebP · up to 3 images · 5MB each.</p>
+            <input
+              name="screenshotLink"
+              type="url"
+              aria-label={`Screenshot link ${i + 1}`}
+              placeholder="https://…"
+              className={fieldClass}
+            />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="screenshotLink" className="text-xs font-medium">Or a link</label>
-            <input id="screenshotLink" name="screenshotLink" type="url" placeholder="https://…" className={fieldClass} />
-          </div>
-        </div>
-      </details>
+        ))}
+        <button
+          type="button"
+          onClick={() => setLinkRows((n) => n + 1)}
+          className="self-start text-sm font-medium text-gs-red hover:underline"
+        >
+          + Add another link
+        </button>
+      </div>
 
       <p className="flex items-start gap-2 rounded-lg bg-sky-50 px-3.5 py-3 text-xs leading-relaxed text-sky-800">
         <span aria-hidden className="mt-px font-semibold">ⓘ</span>

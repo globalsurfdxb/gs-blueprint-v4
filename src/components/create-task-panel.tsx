@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { createTaskInDrawer } from "@/lib/actions/tasks";
-import { MULTI_UPLOAD_BYTES, shrinkImage } from "@/lib/shrink-image";
 import { TaskTypeProvider } from "@/components/task-type-context";
 import { AssigneeField } from "@/components/assignee-field";
 import { BugReportFields } from "@/components/bug-report-fields";
@@ -170,16 +169,8 @@ function CreateForm({
   const selectedGroup = options.groups.find((g) => g.id === selectedGroupId) ?? null;
   const isBugForm = !!selectedGroup && bugMode && selectedGroup.bugTrackingEnabled;
 
-  // Screenshots are shrunk in the browser first, so three of them fit in one request (hosted
-  // functions reject bodies over ~4.5MB). Count and size are checked here for a clear message; the
-  // server re-checks everything.
+  // Screenshots are just links now (name + address), validated on the server before the bug is created.
   async function submit(formData: FormData) {
-    const files = formData.getAll("image").filter((f): f is File => f instanceof File && f.size > 0);
-    formData.delete("image");
-    if (files.length > 3) return { ok: false as const, error: "A bug can have at most 3 screenshots." };
-    const tooBig = files.find((f) => f.size > 5 * 1024 * 1024);
-    if (tooBig) return { ok: false as const, error: `“${tooBig.name}” is over 5MB — use a smaller image.` };
-    for (const f of files) formData.append("image", await shrinkImage(f, MULTI_UPLOAD_BYTES));
     return createTaskInDrawer(options.projectId, formData);
   }
 
@@ -224,6 +215,8 @@ function CreateForm({
             leadId={selectedGroup.leadId}
             leadName={selectedGroup.leadName}
             bugSprints={options.bugSprints}
+            pages={options.pages}
+            defaultPageId={options.defaultPageId}
             initialBugSprintId={initialBugSprintId}
           />
         ) : (

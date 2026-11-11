@@ -269,6 +269,7 @@ export async function deleteUser(
           taskStatusEvents: true,
           bugImagesAdded: true,
           monthlyBriefsCreated: true,
+          projectPagesCreated: true,
         },
       },
       roles: { select: { id: true } },
@@ -365,6 +366,7 @@ export async function reassignAndDeleteUser(
 
       // Team memberships belong to the person, not the work: drop theirs, keep the ones they added.
       await tx.projectMember.deleteMany({ where: { userId } });
+      await tx.projectPage.updateMany({ where: { createdById: userId }, data: { createdById: targetId } });
       await tx.projectMember.updateMany({ where: { addedById: userId }, data: { addedById: targetId } });
 
       await tx.notification.deleteMany({ where: { userId } });

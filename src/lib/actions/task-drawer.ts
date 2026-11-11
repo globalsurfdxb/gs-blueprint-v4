@@ -9,7 +9,7 @@ import { formatDate } from "@/lib/format";
 import { runAction } from "@/lib/run-action";
 import { computeStatusOptions, type StatusOption } from "@/lib/task-status-flow";
 import { hasLoggedTime } from "@/lib/task-activity";
-import { statusLabel } from "@/lib/bug";
+import { statusLabel, ENVIRONMENT_LABELS } from "@/lib/bug";
 
 // Data for the Dev/QA quick-edit drawer (PRD Agile Sprint enhancement). A read-only fetch
 // (via a server action so it can authorize with getCurrentUser) returning everything the
@@ -56,6 +56,17 @@ export type TaskDrawerData = {
   sprints: { id: string; name: string; status: string }[];
   // Priority / Severity editing
   canEditAttributes: boolean;
+  // Read-only detail, so the drawer shows the whole task without opening the full page.
+  description: string | null;
+  stepsToReproduce: string | null;
+  environmentLabel: string | null;
+  createdByName: string;
+  createdAtLabel: string;
+  bugSprintName: string | null;
+  page: { name: string; url: string } | null;
+  bugImages: { id: string; url: string; filename: string }[];
+  links: { id: string; url: string; label: string | null }[];
+  subtasks: { id: string; name: string; statusLabel: string; assigneeName: string | null }[];
   // Timer (the assignee's own, same rule as the full task page)
   canTrackTime: boolean;
   timerRunning: boolean;
@@ -84,6 +95,12 @@ async function loadTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
     where: { id: taskId },
     include: {
       assignedTo: { select: { name: true } },
+      createdBy: { select: { name: true } },
+      bugSprint: { select: { name: true } },
+      page: { select: { name: true, url: true } },
+      bugImages: { select: { id: true, url: true, filename: true }, orderBy: { createdAt: "asc" } },
+      attachments: { select: { id: true, url: true, label: true }, orderBy: { createdAt: "asc" } },
+      subtasks: { select: { id: true, name: true, status: true, taskType: true, assignedTo: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
       group: {
         select: {
           id: true,
@@ -172,6 +189,21 @@ async function loadTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
     sprintId: task.sprintId,
     sprints,
     canEditAttributes: canEditTaskAttributes(user, project, group),
+    description: task.description,
+    stepsToReproduce: task.stepsToReproduce,
+    environmentLabel: task.environment ? ENVIRONMENT_LABELS[task.environment] ?? task.environment : null,
+    createdByName: task.createdBy.name,
+    createdAtLabel: formatDate(task.createdAt),
+    bugSprintName: task.bugSprint?.name ?? null,
+    page: task.page,
+    bugImages: task.bugImages,
+    links: task.attachments,
+    subtasks: task.subtasks.map((s) => ({
+      id: s.id,
+      name: s.name,
+      statusLabel: statusLabel(s.status, s.taskType),
+      assigneeName: s.assignedTo?.name ?? null,
+    })),
     canTrackTime: canLogTime(user, task) && (task.status === "IN_PROGRESS" || !!openLog),
     timerRunning: !!openLog,
     timerSinceIso: openLog ? openLog.startTime.toISOString() : null,

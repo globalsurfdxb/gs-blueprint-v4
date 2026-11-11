@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewReports, canViewHoursReport } from "@/lib/permissions";
-import { getReportScope } from "@/lib/reports";
+import { getOverdueReport, getReportScope, getTimeByClientReport, getTimeLogReport } from "@/lib/reports";
+import { formatDuration } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { TILE_ICONS, type TileIcon } from "@/components/dashboard-ui";
 
@@ -18,7 +19,16 @@ export default async function ReportsIndexPage() {
   // Time Logs (hours) is available to every delivery role — Contributor (own hours), Lead
   // (their team), Cluster Head, Admin — and to Account Managers (their cluster). The other two
   // are oversight-only.
-  const reports: { href: string; title: string; description: string; icon: TileIcon; tag: string; show: boolean }[] = [
+  // A live headline per report, so the index already answers "how are we doing?" before anything is opened.
+  const [monthLogs, overdue, byClient] = await Promise.all([
+    hours ? getTimeLogReport(user, { clientId: "", projectId: "", assigneeId: "", period: "month", from: "", to: "" }) : null,
+    oversight ? getOverdueReport(user) : null,
+    oversight ? getTimeByClientReport(user) : null,
+  ]);
+  const overdueCount = overdue ? overdue.reduce((n, c) => n + c.tasks.length, 0) : 0;
+  const topClient = byClient?.reduce<(typeof byClient)[number] | null>((m, r) => (!m || r.totalSeconds > m.totalSeconds ? r : m), null);
+
+  const reports: { href: string; title: string; description: string; icon: TileIcon; tag: string; show: boolean; stat?: { value: string; label: string; danger?: boolean } }[] = [
     {
       href: "/reports/time-logs",
       title: "Time Logs",
@@ -26,6 +36,7 @@ export default async function ReportsIndexPage() {
       icon: "timer" as const,
       tag: "Excel export",
       show: hours,
+      stat: monthLogs ? { value: formatDuration(monthLogs.grandTotalSeconds), label: "logged this month" } : undefined,
     },
     {
       href: "/reports/overdue",
@@ -34,6 +45,7 @@ export default async function ReportsIndexPage() {
       icon: "alert" as const,
       tag: "Oversight",
       show: oversight,
+      stat: overdue ? { value: String(overdueCount), label: overdueCount === 1 ? "task overdue" : "tasks overdue", danger: overdueCount > 0 } : undefined,
     },
     {
       href: "/reports/time-by-client",
@@ -42,6 +54,7 @@ export default async function ReportsIndexPage() {
       icon: "clock" as const,
       tag: "Oversight",
       show: oversight,
+      stat: byClient ? { value: topClient && topClient.totalSeconds > 0 ? topClient.clientName : "—", label: "most time logged" } : undefined,
     },
   ].filter((r) => r.show);
 
@@ -75,8 +88,16 @@ export default async function ReportsIndexPage() {
               </span>
             </div>
             <h2 className="mt-4 font-heading text-base font-semibold tracking-tight">{r.title}</h2>
-            <p className="mt-1 flex-1 text-sm leading-relaxed text-gs-gray">{r.description}</p>
-            <span className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-gs-red">
+            <p className="mt-1 text-sm leading-relaxed text-gs-gray">{r.description}</p>
+            {r.stat && (
+              <div className="mt-4 flex-1 rounded-lg bg-gs-light/70 px-3.5 py-2.5">
+                <p className={`truncate font-heading text-xl font-bold tabular-nums tracking-tight ${r.stat.danger ? "text-gs-red" : "text-gs-black"}`}>
+                  {r.stat.value}
+                </p>
+                <p className="text-xs text-gs-gray">{r.stat.label}</p>
+              </div>
+            )}
+            <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-gs-red">
               Open report
               <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
             </span>

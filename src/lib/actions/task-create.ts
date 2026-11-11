@@ -46,6 +46,10 @@ export type TaskCreateOptions = {
   groups: CreateGroupOption[];
   // The project's bug sprints (Frontend, Backend…) a reported bug can be filed under, soonest due first.
   bugSprints: { id: string; name: string; dueDate: string }[];
+  // The project's site pages a bug can be filed against (the reporter may also add a new one).
+  pages: { id: string; name: string; url: string }[];
+  // Page to preselect for this reporter: the page of their latest bug here, else the page they added last.
+  defaultPageId: string | null;
 };
 
 // The include shape the creation permission helpers expect.
@@ -185,6 +189,28 @@ async function loadTaskCreateOptions(projectId: string): Promise<TaskCreateOptio
       ).map((b) => ({ id: b.id, name: b.name, dueDate: b.dueDate.toISOString() }))
     : [];
 
+  const pages = await prisma.projectPage.findMany({
+    where: { projectId },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, url: true },
+  });
+
+  // Pre-pick the page this person most likely means: the one on their last bug in this project, otherwise the
+  // page they added most recently. They can still change it or choose "No specific page".
+  const lastBug = await prisma.task.findFirst({
+    where: { projectId, createdById: user.id, taskType: "BUG", pageId: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: { pageId: true },
+  });
+  const lastAdded = lastBug?.pageId
+    ? null
+    : await prisma.projectPage.findFirst({
+        where: { projectId, createdById: user.id },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+  const defaultPageId = lastBug?.pageId ?? lastAdded?.id ?? null;
+
   return {
     projectId: project.id,
     projectName: project.name,
@@ -192,5 +218,7 @@ async function loadTaskCreateOptions(projectId: string): Promise<TaskCreateOptio
     clusterName: project.cluster.name,
     groups,
     bugSprints,
+    pages,
+    defaultPageId,
   };
 }
