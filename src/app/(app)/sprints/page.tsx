@@ -8,7 +8,8 @@ import { AutoFilterForm } from "@/components/auto-filter-form";
 import { Select } from "@/components/select";
 import { EmptyState, SectionCard } from "@/components/dashboard-ui";
 import { SprintProgress } from "@/components/sprint-progress";
-import { SprintLinkRow } from "./sprint-row";
+import { SprintAccordionRow } from "./sprint-accordion-row";
+import { TaskDrawerProvider } from "@/components/task-drawer";
 import { NewSprintPanel } from "./new-sprint-panel";
 
 const STATUS_STYLE: Record<SprintListRow["status"], { label: string; chip: string }> = {
@@ -88,6 +89,7 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
   );
 
   return (
+    <TaskDrawerProvider>
     <div>
       <PageHeader
         title="Sprints"
@@ -234,10 +236,10 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
                   </thead>
                   <tbody>
                     {p.sprints.map((s) => (
-                      <SprintLinkRow
+                      <SprintAccordionRow
                         key={s.id}
-                        href={`/projects/${s.projectId}?tab=sprints&sprint=${s.id}`}
-                        label={`Open ${s.name}`}
+                        sprint={{ id: s.id, name: s.name, projectId: s.projectId, status: s.status }}
+                        colSpan={5}
                       >
                       
                         <td className="px-4 py-3">
@@ -256,7 +258,7 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
                         <td className="px-4 py-3">
                           <SprintProgress counts={s.counts} />
                         </td>
-                                            </SprintLinkRow>
+                                            </SprintAccordionRow>
                     ))}
                   </tbody>
                 </table>
@@ -266,5 +268,6 @@ export default async function SprintsPage({ searchParams }: { searchParams: Prom
         })}
       </div>
     </div>
+    </TaskDrawerProvider>
   );
 }

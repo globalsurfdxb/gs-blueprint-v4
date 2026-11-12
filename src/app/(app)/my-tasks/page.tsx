@@ -5,7 +5,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import { daysOverdue, getLocalDateString, addDays } from "@/lib/timezone";
-import { hasPersonalTaskList, hidesCompletedProjects } from "@/lib/permissions";
+import type { Prisma } from "@/generated/prisma/client";
+import { hasPersonalTaskList, hidesCompletedProjects, isLead } from "@/lib/permissions";
 import { statusLabel } from "@/lib/bug";
 import { KanbanBoard, TaskViews, type ViewTask } from "@/components/task-views";
 import { TaskDrawerProvider, TaskOpener } from "@/components/task-drawer";
@@ -66,30 +67,57 @@ export default async function MyTasksPage({
   const meId = user.id;
   // My Tasks = tasks assigned to me PLUS tasks I created (even when handed to someone else — shown with an
   // "Assigned to" tag so I can follow them). Bugs are managed separately, on the Bugs page.
-  const allTasks = await prisma.task.findMany({
-    where: {
-      taskType: "STANDARD",
-      AND: [
-        { OR: [{ assignedToId: meId }, { createdById: meId }] },
-        { OR: [{ status: { not: "COMPLETED" } }, { status: "COMPLETED", completedAt: { gte: completedSince } }] },
-      ],
-      project: {
-        // Archived projects drop out for everyone.
-        archivedAt: null,
-        // Leads/Contributors don't see work under a Completed project.
-        ...(hidesCompletedProjects(user) ? { status: { not: "COMPLETED" } } : {}),
+  const taskInclude = {
+    project: { include: { client: true } },
+    assignedTo: { select: { id: true, name: true } },
+    createdBy: { select: { name: true } },
+    parentTask: true,
+    group: { select: { pod: { select: { sprintWorkflowEnabled: true } } } },
+    sprint: { select: { id: true, name: true, status: true } },
+  } as const;
+  const openOrRecentlyDone: Prisma.TaskWhereInput = {
+    OR: [{ status: { not: "COMPLETED" } }, { status: "COMPLETED", completedAt: { gte: completedSince } }],
+  };
+  const projectFilter: Prisma.ProjectWhereInput = {
+    // Archived projects drop out for everyone.
+    archivedAt: null,
+    // Leads/Contributors don't see work under a Completed project.
+    ...(hidesCompletedProjects(user) ? { status: { not: "COMPLETED" } } : {}),
+  };
+  const [mineAndCreated, teamAdded] = await Promise.all([
+    prisma.task.findMany({
+      where: {
+        taskType: "STANDARD",
+        AND: [{ OR: [{ assignedToId: meId }, { createdById: meId }] }, openOrRecentlyDone],
+        project: projectFilter,
       },
-    },
-    include: {
-      project: { include: { client: true } },
-      assignedTo: { select: { id: true, name: true } },
-      createdBy: { select: { name: true } },
-      parentTask: true,
-      group: { select: { pod: { select: { sprintWorkflowEnabled: true } } } },
-      sprint: { select: { id: true, name: true, status: true } },
-    },
-    orderBy: { dueDate: "asc" },
-  });
+      include: taskInclude,
+      orderBy: { dueDate: "asc" },
+    }),
+    // A Lead also sees the tasks their team members add for themselves in the teams they lead, so nothing a member
+    // starts goes unnoticed. (An Admin-restricted "own tasks only" Lead is left out, as everywhere else.)
+    isLead(user) && !user.restrictToOwnTasks
+      ? prisma.task.findMany({
+          where: {
+            taskType: "STANDARD",
+            parentTaskId: null,
+            group: { leadUserId: meId },
+            createdById: { not: meId },
+            assignedToId: { not: null },
+            AND: [openOrRecentlyDone],
+            project: projectFilter,
+          },
+          include: taskInclude,
+          orderBy: { dueDate: "asc" },
+        })
+      : Promise.resolve([]),
+  ]);
+  // Self-added only (the member created it for themselves), merged in without duplicates, still due-date ordered.
+  const knownIds = new Set(mineAndCreated.map((t) => t.id));
+  const allTasks = [
+    ...mineAndCreated,
+    ...teamAdded.filter((t) => t.createdById === t.assignedToId && !knownIds.has(t.id)),
+  ].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
 
   // Sprint filter (PRD 8.14) — cross-project, shown only when the user has any Sprint-enabled
   // work. Options: Active Sprint, Backlog (Sprint-enabled but unsprinted), or a specific past
@@ -319,7 +347,7 @@ export default async function MyTasksPage({
           {t.assignedToId === meId ? (
             <span className="text-gs-gray">Me</span>
           ) : (
-            <span className="font-medium" title="You created this task and handed it to someone else">
+            <span className="font-medium" title={`Assigned to ${t.assignedTo?.name ?? "no one"}`}>
               {t.assignedTo?.name ?? "No one"}
             </span>
           )}
@@ -362,7 +390,7 @@ export default async function MyTasksPage({
           {t.assignedToId === meId ? (
             <span className="text-gs-gray">Me</span>
           ) : (
-            <span className="font-medium" title="You created this task and handed it to someone else">
+            <span className="font-medium" title={`Assigned to ${t.assignedTo?.name ?? "no one"}`}>
               {t.assignedTo?.name ?? "No one"}
             </span>
           )}

@@ -219,6 +219,8 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
   const onCreated = useCallback(() => {
     closeCreate();
     router.refresh();
+    // Lets an open list (e.g. an expanded sprint) reload itself.
+    window.dispatchEvent(new Event("gs:task-created"));
   }, [closeCreate, router]);
 
   // Every inline edit runs through here: perform the mutation, re-fetch the drawer's own data,
