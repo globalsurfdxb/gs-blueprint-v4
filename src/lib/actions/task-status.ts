@@ -92,11 +92,15 @@ async function approveTaskCore(taskId: string): Promise<Done> {
   const user = await requireUser();
   const { task, project, group } = await loadTaskWithGroup(taskId);
 
-  // Bugs (PRD v1.18): a Contributor member of a Bug-Tracking group can close the bug after
-  // retesting; the Lead/Admin always can. Standard tasks stay strictly Lead-only.
+  // Bugs: closed after retest by a QA tester or the group Lead / Admin — never by the developers who fixed
+  // them. Standard tasks stay strictly Lead-only.
   const verdictGroup = group ? { ...group, bugTrackingEnabled: group.pod?.bugTrackingEnabled } : null;
   if (!canRecordBugVerdict(user, verdictGroup, task)) {
-    throw new Error("Only the group Lead (or Admin) can complete a task after review.");
+    throw new Error(
+      task.taskType === "BUG"
+        ? "Only a QA tester, the team Lead or an Admin can close a bug once it is Ready for Retest."
+        : "Only the group Lead (or Admin) can complete a task after review.",
+    );
   }
   if (task.status !== "REVIEW") throw new Error("Only a task that is in Review can be completed.");
 
@@ -128,11 +132,15 @@ async function sendToRevisionCore(taskId: string): Promise<Done> {
   const user = await requireUser();
   const { task, project, group } = await loadTaskWithGroup(taskId);
 
-  // Bugs (PRD v1.18): a Contributor member of a Bug-Tracking group can reopen the bug after a
-  // failed retest; the Lead/Admin always can. Standard tasks stay strictly Lead-only.
+  // Bugs: reopened after a failed retest by a QA tester or the group Lead / Admin. Standard tasks stay
+  // strictly Lead-only.
   const verdictGroup = group ? { ...group, bugTrackingEnabled: group.pod?.bugTrackingEnabled } : null;
   if (!canRecordBugVerdict(user, verdictGroup, task)) {
-    throw new Error("Only the group Lead (or Admin) can send a task back for revision.");
+    throw new Error(
+      task.taskType === "BUG"
+        ? "Only a QA tester, the team Lead or an Admin can reopen a bug once it is Ready for Retest."
+        : "Only the group Lead (or Admin) can send a task back for revision.",
+    );
   }
   if (task.status !== "REVIEW") throw new Error("Only a task that is in Review can be sent back for revision.");
 

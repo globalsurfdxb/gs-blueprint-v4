@@ -45,6 +45,7 @@ export function CreateTaskPanel({
   loading,
   initialGroupId,
   initialBugSprintId,
+  initialSprintId,
   onProjectChange,
   onClose,
   onCreated,
@@ -59,6 +60,8 @@ export function CreateTaskPanel({
   initialGroupId: string | null;
   /** Preselects a bug sprint (opened from a bug sprint's "Report bug here"). */
   initialBugSprintId?: string | null;
+  /** Preselects a sprint (opened from a sprint's "New task"). */
+  initialSprintId?: string | null;
   onProjectChange: (projectId: string) => void;
   onClose: () => void;
   onCreated: () => void;
@@ -136,6 +139,7 @@ export function CreateTaskPanel({
             options={bugMode ? { ...options, groups: options.groups.filter((g) => g.bugTrackingEnabled) } : options}
             initialGroupId={initialGroupId}
             initialBugSprintId={initialBugSprintId ?? null}
+            initialSprintId={initialSprintId ?? null}
             bugMode={bugMode}
             onCreated={onCreated}
             onCancel={onClose}
@@ -150,6 +154,7 @@ function CreateForm({
   options,
   initialGroupId,
   initialBugSprintId,
+  initialSprintId,
   bugMode,
   onCreated,
   onCancel,
@@ -157,6 +162,7 @@ function CreateForm({
   options: TaskCreateOptions;
   initialGroupId: string | null;
   initialBugSprintId: string | null;
+  initialSprintId: string | null;
   bugMode: boolean;
   onCreated: () => void;
   onCancel: () => void;
@@ -249,7 +255,12 @@ function CreateForm({
                 <label htmlFor="create-sprint" className={labelClass}>
                   Sprint <span className="font-normal text-gs-gray">(optional)</span>
                 </label>
-                <Select id="create-sprint" name="sprintId" defaultValue="" className={fieldClass}>
+                <Select
+                  id="create-sprint"
+                  name="sprintId"
+                  defaultValue={selectedGroup.sprints.some((s) => s.id === initialSprintId) ? (initialSprintId ?? "") : ""}
+                  className={fieldClass}
+                >
                   <option value="">Backlog (no sprint)</option>
                   {selectedGroup.sprints.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}{s.status === "ACTIVE" ? " · Active" : ""}</option>

@@ -84,9 +84,18 @@ export function explainBlockedMove(args: {
 
   const isLeadMove = task.status === "REVIEW" && (target === "COMPLETED" || target === "IN_PROGRESS");
   if (isLeadMove) {
+    if (task.taskType === "BUG") {
+      return target === "COMPLETED"
+        ? "Only a QA tester, the team Lead or an Admin can close a bug once it is Ready for Retest."
+        : "Only a QA tester, the team Lead or an Admin can reopen a bug once it is Ready for Retest.";
+    }
     return target === "COMPLETED"
       ? "Only the group Lead (or Admin) can complete a task after review."
       : "Only the group Lead (or Admin) can send a task back for revision.";
+  }
+  // A bug can't be closed before it reaches Ready for Retest, whoever you are.
+  if (task.taskType === "BUG" && target === "COMPLETED" && task.status !== "REVIEW") {
+    return "A bug can only be closed once it is Ready for Retest.";
   }
   if (task.status === "COMPLETED") return "This task is completed and can't be changed.";
   if (task.status === "ON_HOLD") return "This task is on hold. Ask the group Lead to resume it first.";

@@ -699,10 +699,10 @@ export function canRejectAndReturn(user: CurrentUser, group: TaskGroupRef | null
 }
 
 /**
- * Bug verdict — Close (Review → Completed) / Reopen (Review → Revision) — on a BUG only
- * (PRD v1.18). Because QA is a Contributor inside the Development team, it retests and rules
- * on its own bugs without waiting for the Lead: any Contributor member of a Bug-Tracking
- * group may record the verdict, on top of the Lead/Admin who always can (canReviewGroupTask).
+ * Bug verdict — Close (Review → Completed) / Reopen (Review → Revision) — on a BUG only. It is only possible
+ * once a bug is Ready for Retest (callers also require status Review), and only by a QA tester (a Contributor on the
+ * Bug-Tracking team an Admin has marked as QA) or the group Lead / Admin (canReviewGroupTask). The developers who
+ * fix the bugs move them forward to Ready for Retest but can no longer close or reopen them.
  * Scoped tightly to bugs — a Standard task's Review verdict stays Lead-only, unchanged.
  */
 export function canRecordBugVerdict(
@@ -713,6 +713,7 @@ export function canRecordBugVerdict(
   if (canReviewGroupTask(user, group)) return true;
   if (task.taskType !== "BUG") return false;
   if (group === null || group.bugTrackingEnabled !== true) return false;
+  if (!user.isQa) return false;
   return canSelfCreateInGroup(user, { clusterId: group.clusterId ?? null, podId: group.podId ?? null });
 }
 

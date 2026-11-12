@@ -89,6 +89,7 @@ const updateUserSchema = z.object({
   location: z.enum(["DUBAI", "INDIA"]),
   isActive: z.boolean(),
   restrictToOwnTasks: z.boolean(),
+  isQa: z.boolean(),
 });
 
 const setPasswordSchema = z
@@ -139,6 +140,7 @@ export async function updateUser(userId: string, formData: FormData) {
     location: formData.get("location"),
     isActive: formData.get("isActive") === "on",
     restrictToOwnTasks: formData.get("restrictToOwnTasks") === "on",
+    isQa: formData.get("isQa") === "on",
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");

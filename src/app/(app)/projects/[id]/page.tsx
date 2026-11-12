@@ -833,6 +833,8 @@ export default async function ProjectDetailPage({
             surfacePath={`/projects/${project.id}`}
             defaultOpenId={(focusSprint && visibleSprintIds.has(focusSprint.id) ? focusSprint : visibleSprintsByRelevance[0])?.id ?? null}
             canManage={canManageSprintsHere}
+            projectId={project.id}
+            canCreateTask={groupCards.some((c) => c.group.pod?.sprintWorkflowEnabled && c.canCreateTask)}
             createAction={createSprintWithId}
             updateAction={updateSprint}
             setStatusAction={setSprintStatus}

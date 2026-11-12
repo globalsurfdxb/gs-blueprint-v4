@@ -121,6 +121,17 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
           </p>
         </div>
 
+        <div className="flex flex-col gap-1">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" name="isQa" defaultChecked={user.isQa} />
+            QA tester
+          </label>
+          <p className="ml-6 text-xs text-gs-gray">
+            On a Bug-Tracking team (e.g. Dev): can close or reopen a bug once it is Ready for Retest, alongside the team
+            Lead. Developers who aren&apos;t marked as QA can move a bug up to Ready for Retest but not close it.
+          </p>
+        </div>
+
         <div className="mt-2 flex items-center gap-3">
           <button
             type="submit"

@@ -34,7 +34,7 @@ type DrawerApi = {
   openTask: (taskId: string) => void;
   /** Open the create drawer. Pass a project (and optionally a group) to pre-select it; with no
    * project the picker defaults to the user's first creatable project. */
-  openCreate: (projectId?: string, groupId?: string, opts?: { bug?: boolean; bugSprintId?: string }) => void;
+  openCreate: (projectId?: string, groupId?: string, opts?: { bug?: boolean; bugSprintId?: string; sprintId?: string }) => void;
 };
 const TaskDrawerContext = createContext<DrawerApi | null>(null);
 /** Returns the drawer API, or null when no drawer provider is mounted — callers fall back to
@@ -83,6 +83,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
   const [createProjectLocked, setCreateProjectLocked] = useState(false);
   const [createBugMode, setCreateBugMode] = useState(false);
   const [createBugSprintId, setCreateBugSprintId] = useState<string | null>(null);
+  const [createSprintId, setCreateSprintId] = useState<string | null>(null);
   const { addToast } = useToast();
   const router = useRouter();
 
@@ -151,12 +152,13 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
   // shows Project Name and Cluster as fixed, read-only fields. Opened from a cross-project surface
   // (My Tasks): a picker limited to the user's own projects.
   const openCreate = useCallback(
-    (projectId?: string, groupId?: string, opts?: { bug?: boolean; bugSprintId?: string }) => {
+    (projectId?: string, groupId?: string, opts?: { bug?: boolean; bugSprintId?: string; sprintId?: string }) => {
       setTaskId(null);
       setData(null);
       setCreating(true);
       setCreateBugMode(!!opts?.bug);
       setCreateBugSprintId(opts?.bugSprintId ?? null);
+      setCreateSprintId(opts?.sprintId ?? null);
       setCreateProjectLocked(!!projectId);
       setCreateInitialGroupId(groupId ?? null);
       setCreateOptions(null);
@@ -262,6 +264,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
           loading={createLoading}
           initialGroupId={createInitialGroupId}
           initialBugSprintId={createBugSprintId}
+          initialSprintId={createSprintId}
           onProjectChange={changeCreateProject}
           onClose={closeCreate}
           onCreated={onCreated}

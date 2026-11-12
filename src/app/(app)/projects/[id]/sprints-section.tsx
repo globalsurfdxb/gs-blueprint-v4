@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { SprintProgress } from "@/components/sprint-progress";
 import { KanbanBoard, type ViewTask } from "@/components/task-views";
-import { TaskDrawerProvider } from "@/components/task-drawer";
+import { TaskDrawerProvider, useTaskDrawer } from "@/components/task-drawer";
 import type { SprintCounts } from "@/lib/sprint-dashboard";
 
 /** An existing task that could be put into a sprint (backlog, or sitting in another open sprint). */
@@ -221,6 +221,8 @@ function SprintPanel({
   open,
   onToggle,
   canManage,
+  canCreateTask,
+  projectId,
   candidates,
   updateAction,
   setStatusAction,
@@ -232,11 +234,14 @@ function SprintPanel({
   open: boolean;
   onToggle: () => void;
   canManage: boolean;
+  canCreateTask: boolean;
+  projectId: string;
   candidates: SprintCandidate[];
   updateAction: (id: string, formData: FormData) => void;
   setStatusAction: (id: string, formData: FormData) => void;
   addTasksAction: (id: string, formData: FormData) => void;
 }) {
+  const drawer = useTaskDrawer();
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
   const addWithId = addTasksAction.bind(null, sprint.id);
@@ -363,19 +368,27 @@ function SprintPanel({
             </ActionForm>
           )}
 
-          {addable.length > 0 && (
-            <div className="border-t border-gs-gray/10 px-4 py-3">
-              {!adding ? (
-                <button type="button" onClick={() => setAdding(true)} className="btn btn-secondary btn-sm">
-                  + Add existing tasks
+          {((canCreateTask && drawer && sprint.status !== "COMPLETED") || addable.length > 0) && (
+            <div className="flex flex-wrap items-start gap-2 border-t border-gs-gray/10 px-4 py-3">
+              {canCreateTask && drawer && sprint.status !== "COMPLETED" && (
+                <button
+                  type="button"
+                  onClick={() => drawer.openCreate(projectId, undefined, { sprintId: sprint.id })}
+                  className="btn btn-primary btn-sm"
+                >
+                  + New task in this sprint
                 </button>
-              ) : (
-                <AddTasksPicker
-                  candidates={addable}
-                  action={addWithId}
-                  onDone={() => setAdding(false)}
-                />
               )}
+              {addable.length > 0 &&
+                (!adding ? (
+                  <button type="button" onClick={() => setAdding(true)} className="btn btn-secondary btn-sm">
+                    + Add existing tasks
+                  </button>
+                ) : (
+                  <div className="w-full">
+                    <AddTasksPicker candidates={addable} action={addWithId} onDone={() => setAdding(false)} />
+                  </div>
+                ))}
             </div>
           )}
 
@@ -383,7 +396,7 @@ function SprintPanel({
             <KanbanBoard tasks={tasks} surfacePath={surfacePath} />
             {tasks.length === 0 && (
               <p className="px-1 pt-3 text-sm text-gs-gray">
-                No tasks in this sprint yet — add tasks to it from a task&apos;s Sprint field, or when creating one.
+                No tasks in this sprint yet — use “+ New task in this sprint”, “+ Add existing tasks”, or a task&apos;s Sprint field.
               </p>
             )}
           </div>
@@ -463,6 +476,8 @@ export function SprintsSection({
   surfacePath,
   defaultOpenId,
   canManage,
+  canCreateTask,
+  projectId,
   candidates,
   createAction,
   updateAction,
@@ -470,6 +485,8 @@ export function SprintsSection({
   addTasksAction,
 }: {
   sprints: SprintRow[];
+  canCreateTask: boolean;
+  projectId: string;
   candidates: SprintCandidate[];
   addTasksAction: (id: string, formData: FormData) => void;
   tasksBySprint: Record<string, ViewTask[]>;
@@ -541,6 +558,8 @@ export function SprintsSection({
                 open={openIds.has(s.id)}
                 onToggle={() => toggle(s.id)}
                 canManage={canManage}
+                canCreateTask={canCreateTask}
+                projectId={projectId}
                 candidates={candidates}
                 updateAction={updateAction}
                 setStatusAction={setStatusAction}

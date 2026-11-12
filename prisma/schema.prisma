@@ -113,6 +113,9 @@ model User {
   // role (e.g. a Lead) would normally show them the whole group — for a Lead who sits in a pod
   // alongside people whose work they shouldn't see.
   restrictToOwnTasks Boolean @default(false) @map("restrict_to_own_tasks")
+  // QA tester (a Contributor on a Bug-Tracking team): with the group Lead and Admin, one of the few people who can
+  // close or reopen a bug once it is Ready for Retest. Developers on the team move bugs forward but never close them.
+  isQa Boolean @default(false) @map("is_qa")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
