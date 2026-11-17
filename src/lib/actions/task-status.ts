@@ -75,14 +75,13 @@ async function submitForReviewCore(taskId: string): Promise<Done> {
   // The work is handed over, so the assignee's clock stops with it.
   if (task.assignedToId) await stopOpenTimers(taskId, new Date(), task.assignedToId);
 
-  if (group) {
-    await notifyUsers([group.leadUserId], {
-      type: "SUBMITTED_FOR_REVIEW",
-      message: `"${task.name}" was submitted for review by ${user.name}.`,
-      relatedTaskId: task.id,
-      relatedProjectId: project.id,
-    });
-  }
+  // The group Lead reviews it, and so does whoever assigned it (when that is someone else).
+  await notifyUsers([group?.leadUserId, task.createdById === user.id ? null : task.createdById], {
+    type: "SUBMITTED_FOR_REVIEW",
+    message: `"${task.name}" was submitted for review by ${user.name}.`,
+    relatedTaskId: task.id,
+    relatedProjectId: project.id,
+  });
 
   revalidateTaskSurfaces(project.id, taskId);
   return { ok: true };
@@ -99,7 +98,7 @@ async function approveTaskCore(taskId: string): Promise<Done> {
     throw new Error(
       task.taskType === "BUG"
         ? "Only a QA tester, the team Lead or an Admin can close a bug once it is Ready for Retest."
-        : "Only the group Lead (or Admin) can complete a task after review.",
+        : "Only the group Lead, the person who assigned the task, or an Admin can complete a task after review.",
     );
   }
   if (task.status !== "REVIEW") throw new Error("Only a task that is in Review can be completed.");
@@ -139,7 +138,7 @@ async function sendToRevisionCore(taskId: string): Promise<Done> {
     throw new Error(
       task.taskType === "BUG"
         ? "Only a QA tester, the team Lead or an Admin can reopen a bug once it is Ready for Retest."
-        : "Only the group Lead (or Admin) can send a task back for revision.",
+        : "Only the group Lead, the person who assigned the task, or an Admin can send a task back for revision.",
     );
   }
   if (task.status !== "REVIEW") throw new Error("Only a task that is in Review can be sent back for revision.");

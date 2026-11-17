@@ -719,6 +719,19 @@ export function canRecordBugVerdict(
   task: Task,
 ) {
   if (canReviewGroupTask(user, group)) return true;
+  // Whoever set the work (created the task and handed it to someone else) reviews it too — approve or send back for
+  // revision — even when the assignee sits in a group they don't lead (e.g. the Social Media Lead's task to the Content
+  // Lead). Not for bugs (QA decides those) and not for Content Calendar tasks, which have their own sign-off steps.
+  if (
+    task.taskType !== "BUG" &&
+    task.createdById === user.id &&
+    task.assignedToId !== null &&
+    task.assignedToId !== user.id &&
+    task.publishDate === null &&
+    task.contentTypeId === null
+  ) {
+    return true;
+  }
   if (task.taskType !== "BUG") return false;
   if (group === null || group.bugTrackingEnabled !== true) return false;
   if (!user.isQa) return false;

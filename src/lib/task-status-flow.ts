@@ -90,8 +90,8 @@ export function explainBlockedMove(args: {
         : "Only a QA tester, the team Lead or an Admin can reopen a bug once it is Ready for Retest.";
     }
     return target === "COMPLETED"
-      ? "Only the group Lead (or Admin) can complete a task after review."
-      : "Only the group Lead (or Admin) can send a task back for revision.";
+      ? "Only the group Lead, the person who assigned the task, or an Admin can complete a task after review."
+      : "Only the group Lead, the person who assigned the task, or an Admin can send a task back for revision.";
   }
   // A bug can't be closed before it reaches Ready for Retest, whoever you are.
   if (task.taskType === "BUG" && target === "COMPLETED" && task.status !== "REVIEW") {

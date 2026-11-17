@@ -71,12 +71,23 @@ export default async function MyReviewsPage({
   // a Contributor) before anyone can act on it, and today that's only ever surfaced by a
   // one-time notification. A missed notification left it invisible until someone happened
   // to open the project's Task Groups view, so it belongs in this queue too.
+  // Also the standard tasks this person assigned to someone else (e.g. the Social Media Lead's task to the Content Lead):
+  // they review those too, wherever the assignee's group sits.
   const baseWhere = {
-    group: { leadUserId: user.id },
+    OR: [
+      { group: { leadUserId: user.id } },
+      {
+        createdById: user.id,
+        assignedToId: { not: user.id },
+        taskType: { not: "BUG" as const },
+        publishDate: null,
+        contentTypeId: null,
+      },
+    ],
     project: { status: { not: "COMPLETED" as const }, archivedAt: null },
   };
   const loadTasks = (where: object, orderBy: object) =>
-    prisma.task.findMany({ where: { ...baseWhere, ...where }, include: taskInclude, orderBy });
+    prisma.task.findMany({ where: { AND: [baseWhere, where] }, include: taskInclude, orderBy });
 
   let tasks: Awaited<ReturnType<typeof loadTasks>>;
   if (view === "action") {
