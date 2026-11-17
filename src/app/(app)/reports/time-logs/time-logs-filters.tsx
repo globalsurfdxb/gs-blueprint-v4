@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/date-input";
 import { useState } from "react";
 import Link from "next/link";
 import type { TimeLogParams, TimeLogPeriod } from "@/lib/reports";
@@ -97,13 +98,12 @@ export function TimeLogsFilters({
         </label>
         <label className="flex min-w-0 flex-col gap-1.5">
           <span className={labelClass}>From date</span>
-          <input
-            type="date"
+          <DateInput
             name="from"
             value={from}
             max={to || undefined}
-            onChange={(e) => {
-              setFrom(e.target.value);
+            onValueChange={(v) => {
+              setFrom(v);
               setPeriod("custom");
             }}
             className="field field-sm w-full"
@@ -111,13 +111,12 @@ export function TimeLogsFilters({
         </label>
         <label className="flex min-w-0 flex-col gap-1.5">
           <span className={labelClass}>To date</span>
-          <input
-            type="date"
+          <DateInput
             name="to"
             value={to}
             min={from || undefined}
-            onChange={(e) => {
-              setTo(e.target.value);
+            onValueChange={(v) => {
+              setTo(v);
               setPeriod("custom");
             }}
             className="field field-sm w-full"

@@ -1,3 +1,4 @@
+import { DateInput } from "@/components/date-input";
 import { ActionForm } from "@/components/action-form";
 import { SaveButton } from "@/components/save-button";
 import { Select } from "@/components/select";
@@ -129,20 +130,18 @@ export function ProjectEditForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="startDate" className="text-sm font-medium">Start Date</label>
-          <input
+          <DateInput
             id="startDate"
             name="startDate"
-            type="date"
             defaultValue={toDateInputValue(defaults.startDate)}
             className="field"
           />
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="deadline" className="text-sm font-medium">Deadline</label>
-          <input
+          <DateInput
             id="deadline"
             name="deadline"
-            type="date"
             defaultValue={toDateInputValue(defaults.deadline)}
             className="field"
           />

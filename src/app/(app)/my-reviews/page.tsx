@@ -12,6 +12,9 @@ import { statusLabel } from "@/lib/bug";
 import { Select } from "@/components/select";
 import { TaskRow } from "@/components/task-row";
 import { ProjectCardHeader } from "@/components/project-card-header";
+import { KanbanBoard, TaskViews, type ViewTask } from "@/components/task-views";
+import { TaskDrawerProvider } from "@/components/task-drawer";
+import { BulkStatusProvider, RowSelect, SelectAll } from "./bulk-status";
 
 // The lens the page is shown through. "action" is the original queue (submitted for review, or
 // unassigned); the rest are the filtered lists the Lead dashboard's cards open (QA F-02), plus a
@@ -28,7 +31,13 @@ type ViewKey = keyof typeof VIEWS;
 const COMPLETED_WINDOW_DAYS = 30;
 const FALLBACK_LOCATION = "DUBAI";
 
-const taskInclude = { project: { include: { client: true } }, assignedTo: true, parentTask: true } as const;
+const taskInclude = {
+  project: { include: { client: true } },
+  assignedTo: true,
+  parentTask: true,
+  sprint: { select: { id: true, name: true, status: true } },
+  bugSprint: { select: { id: true, name: true, dueDate: true } },
+} as const;
 
 export default async function MyReviewsPage({
   searchParams,
@@ -198,7 +207,7 @@ export default async function MyReviewsPage({
         contentTypeId: { not: null },
         group: { pod: { name: CONTENT_POD_NAME } },
       },
-      include: { project: { include: { client: true } }, assignedTo: true, parentTask: true },
+      include: taskInclude,
       orderBy: { dueDate: "asc" },
     });
     const contentIds = contentCandidates.map((t) => t.id);
@@ -221,7 +230,7 @@ export default async function MyReviewsPage({
           calendarApprovedAt: null,
           group: { pod: { name: DESIGN_POD_NAME } },
         },
-        include: { project: { include: { client: true } }, assignedTo: true, parentTask: true },
+        include: taskInclude,
         orderBy: { dueDate: "asc" },
       })
     ).map((t) => ({ ...t, calendarStage: "design" as const }));
@@ -249,7 +258,95 @@ export default async function MyReviewsPage({
     }
   }
 
+  // Inside a project, tasks that sit in a sprint (or bugs in a bug sprint) are shown under that sprint, in the list
+  // and on the board; everything else is under "No sprint". Active sprints come first, then Planned, Completed, bug
+  // sprints, and "No sprint" last.
+  type SprintGroup = { key: string; label: string; sub: string; rank: number; tasks: typeof tasks };
+  const sprintGroupsOf = (list: typeof tasks): SprintGroup[] => {
+    const map = new Map<string, SprintGroup>();
+    for (const t of list) {
+      let key = "none";
+      let label = "No sprint";
+      let sub = "";
+      let rank = 5;
+      if (t.sprint) {
+        key = `s:${t.sprint.id}`;
+        label = t.sprint.name;
+        sub = t.sprint.status === "ACTIVE" ? "Active sprint" : t.sprint.status === "COMPLETED" ? "Completed sprint" : "Planned sprint";
+        rank = t.sprint.status === "ACTIVE" ? 0 : t.sprint.status === "PLANNED" ? 1 : 2;
+      } else if (t.bugSprint) {
+        key = `b:${t.bugSprint.id}`;
+        label = t.bugSprint.name;
+        sub = `Bug sprint · due ${formatDate(t.bugSprint.dueDate)}`;
+        rank = 3;
+      }
+      const g = map.get(key) ?? { key, label, sub, rank, tasks: [] };
+      g.tasks.push(t);
+      map.set(key, g);
+    }
+    return Array.from(map.values()).sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
+  };
+  const hasSprintGroups = (list: typeof tasks) => list.some((t) => t.sprint || t.bugSprint);
+
+  // Flat task list for the Kanban / Calendar renderings — the very same tasks the list shows.
+  const dayKey = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  const boardTasks: ViewTask[] = tasks.map((t) => ({
+    id: t.id,
+    projectId: t.projectId,
+    name: t.parentTask ? `${t.parentTask.name} › ${t.name}` : t.name,
+    status: t.status,
+    onHoldFromStatus: t.onHoldFromStatus ?? null,
+    taskType: t.taskType,
+    priority: t.priority,
+    revisionCount: t.revisionCount,
+    assigneeName: t.assignedTo?.name ?? null,
+    isTimerRunning: false,
+    inActiveSprint: t.sprint?.status === "ACTIVE",
+    sprintId: t.sprintId ?? null,
+    sprintName: t.sprint?.name ?? null,
+    bugSprintName: t.bugSprint?.name ?? null,
+    dueKey: dayKey(t.dueDate),
+    dueLabel: formatDate(t.dueDate),
+    projectName: t.project.name,
+    projectLabel: `${t.project.name} · ${t.project.client.name}`,
+  }));
+  const boardTodayKey = dayKey(now);
+
+  // One board per project, each under its own heading — same grouping as the list.
+  const kanbanByProject = (
+    <div className="flex flex-col gap-6">
+      {Array.from(groups.values()).map(({ project, tasks: projectTasks }) => (
+        <section key={project.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
+          <ProjectCardHeader projectId={project.id} name={project.name} client={project.client.name} count={projectTasks.length} />
+          <div className="flex flex-col gap-5 bg-gs-light/40 p-3 md:p-4">
+            {(hasSprintGroups(projectTasks) ? sprintGroupsOf(projectTasks) : [{ key: "all", label: "", sub: "", rank: 0, tasks: projectTasks }]).map(
+              (g) => (
+                <div key={g.key}>
+                  {g.label && (
+                    <h3 className="mb-2 flex flex-wrap items-baseline gap-x-2 px-1 text-sm font-semibold">
+                      {g.label}
+                      {g.sub && <span className="text-xs font-normal text-gs-gray">{g.sub}</span>}
+                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold tabular-nums text-gs-gray">{g.tasks.length}</span>
+                    </h3>
+                  )}
+                  <KanbanBoard
+                    tasks={boardTasks
+                      .filter((b) => g.tasks.some((t) => t.id === b.id))
+                      .map((b) => ({ ...b, projectLabel: undefined, projectName: undefined }))}
+                    surfacePath="/my-reviews"
+                  />
+                </div>
+              ),
+            )}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+
   return (
+    <TaskDrawerProvider>
     <div>
       <PageHeader
         title="My Reviews"
@@ -442,7 +539,18 @@ Work submitted for your review, or still unassigned, across every project you le
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-6">
+      {groups.size > 0 && (
+      <div className="mt-6">
+      <BulkStatusProvider surfacePath="/my-reviews">
+      <TaskViews
+        surfacePath="/my-reviews"
+        tasks={boardTasks}
+        todayKey={boardTodayKey}
+        showFilters={false}
+        defaultMode="kanban"
+        kanbanView={kanbanByProject}
+      >
+      <div className="flex flex-col gap-6">
         {Array.from(groups.values()).map(({ project, tasks: projectTasks }) => (
           <section key={project.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
             <ProjectCardHeader projectId={project.id} name={project.name} client={project.client.name} count={projectTasks.length} />
@@ -451,20 +559,37 @@ Work submitted for your review, or still unassigned, across every project you le
                 <table className="w-full min-w-[560px] text-sm">
                   <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
                     <tr>
+                      <th className="w-10 px-4 py-3">
+                        <SelectAll ids={projectTasks.filter((t) => t.status !== "COMPLETED").map((t) => t.id)} />
+                      </th>
                       <th className="whitespace-nowrap px-4 py-3">Task</th>
                       <th className="whitespace-nowrap px-4 py-3">Assignee</th>
                       <th className="whitespace-nowrap px-4 py-3">Due Date</th>
+                      <th className="whitespace-nowrap px-4 py-3">Sprint</th>
                       <th className="whitespace-nowrap px-4 py-3">Status</th>
                       <th className="whitespace-nowrap px-4 py-3">Priority</th>
                       <th className="whitespace-nowrap px-4 py-3">Revisions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {projectTasks.map((t) => {
+                    {sprintGroupsOf(projectTasks).flatMap((g) => [
+                      ...(hasSprintGroups(projectTasks)
+                        ? [
+                            <tr key={`h-${g.key}`} className="border-t border-gs-gray/10 bg-gs-light/60">
+                              <td colSpan={8} className="px-4 py-2 text-xs">
+                                <span className="font-semibold text-gs-black/80">{g.label}</span>
+                                {g.sub && <span className="ml-2 text-gs-gray">{g.sub}</span>}
+                                <span className="ml-2 tabular-nums text-gs-gray">· {g.tasks.length}</span>
+                              </td>
+                            </tr>,
+                          ]
+                        : []),
+                      ...g.tasks.map((t) => {
                       // A completed task is never overdue — only still-open work shows days late.
                       const late = t.status === "COMPLETED" ? null : daysOverdue(t.dueDate, t.assignedTo?.location, now);
                       return (
                         <TaskRow key={t.id} taskId={t.id} projectId={t.projectId} className="border-t border-gs-gray/10">
+                          <td className="w-10 px-4 py-3">{t.status !== "COMPLETED" && <RowSelect id={t.id} name={t.name} />}</td>
                           <td className="px-4 py-3">
                             <Link href={`/projects/${t.projectId}/tasks/${t.id}`} className="font-medium hover:underline">
                               {t.parentTask ? `${t.parentTask.name} › ${t.name}` : t.name}
@@ -486,6 +611,16 @@ Work submitted for your review, or still unassigned, across every project you le
                             )}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3">
+                            {t.sprint ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-gs-light px-2.5 py-0.5 text-xs font-medium">
+                                {t.sprint.name}
+                                {t.sprint.status === "ACTIVE" && <span className="text-green-600">· Active</span>}
+                              </span>
+                            ) : (
+                              <span className="text-gs-gray/60">—</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
                             <TaskStatusChip status={t.status} label={statusLabel(t.status, t.taskType)} />
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{t.priority}</td>
@@ -504,7 +639,8 @@ Work submitted for your review, or still unassigned, across every project you le
                           </td>
                         </TaskRow>
                       );
-                    })}
+                    }),
+                    ])}
                   </tbody>
                 </table>
               </div>
@@ -512,6 +648,11 @@ Work submitted for your review, or still unassigned, across every project you le
           </section>
         ))}
       </div>
+      </TaskViews>
+      </BulkStatusProvider>
+      </div>
+      )}
     </div>
+    </TaskDrawerProvider>
   );
 }

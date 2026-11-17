@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/date-input";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -75,7 +76,7 @@ export function NewBugSprintPanel({ projects }: { projects: { id: string; name: 
                   <label htmlFor="new-bs-due" className="text-[13px] font-medium text-gs-black/80">
                     Due date <span className="text-gs-red">*</span>
                   </label>
-                  <input id="new-bs-due" type="date" name="dueDate" required className="field" />
+                  <DateInput id="new-bs-due" name="dueDate" required className="field" />
                 </div>
               </div>
               <div className="flex justify-end gap-2">

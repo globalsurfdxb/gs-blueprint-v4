@@ -22,9 +22,12 @@ import {
   canApproveCalendarHandoff,
   canApproveCalendarFinalDelivery,
   canAssignTaskToSprint,
+  canEditTaskDescription,
 } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { createSubtask, assignHandoffTask, reassignTask, deleteTask } from "@/lib/actions/tasks";
+import { createSubtask, assignHandoffTask, reassignTask, deleteTask, updateTaskDescription } from "@/lib/actions/tasks";
+import { TaskDescriptionEditor } from "@/components/task-description-editor";
+import { LinkifiedText } from "@/components/linkified-text";
 import { setTaskSprint } from "@/lib/actions/sprints";
 import { resolveTaskAssigneeContext } from "@/lib/task-assignment";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -187,6 +190,7 @@ export default async function TaskDetailPage({
     task.comments.length > 0 ||
     task.timeLogs.length > 0;
   const canDelete = canDeleteTask(user, group, task) && !taskHasActivity;
+  const canEditDescription = canEditTaskDescription(user, project, group, task);
   const isBug = task.taskType === "BUG";
   const isOverdue = !!task.dueDate && task.dueDate < new Date() && task.status !== "COMPLETED";
 
@@ -404,17 +408,23 @@ export default async function TaskDetailPage({
       </aside>
 
       <div className="flex min-w-0 flex-col gap-5 [&>*]:mt-0!">
-      {task.description && (
+      {(task.description || canEditDescription) && (
         <section className="rounded-xl border border-gs-gray/10 bg-white p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-gs-gray">Description</h2>
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-gs-black/80">{task.description}</p>
+          <div className="mt-2">
+            <TaskDescriptionEditor
+              description={task.description}
+              canEdit={canEditDescription}
+              action={updateTaskDescription.bind(null, task.id)}
+            />
+          </div>
         </section>
       )}
 
       {isBug && task.stepsToReproduce && (
         <div className="mt-4 rounded-lg border border-gs-gray/15 bg-white px-4 py-3 text-sm">
           <p className="text-xs uppercase text-gs-gray">Steps to Reproduce</p>
-          <p className="mt-1 whitespace-pre-wrap">{task.stepsToReproduce}</p>
+          <LinkifiedText text={task.stepsToReproduce} className="mt-1" />
         </div>
       )}
 

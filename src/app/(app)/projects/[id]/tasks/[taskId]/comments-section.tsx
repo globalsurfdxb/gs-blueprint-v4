@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatLocalDate, formatLocalTime } from "@/lib/timezone";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { LinkifiedText } from "@/components/linkified-text";
 
 type CommentItem = {
   id: string;
@@ -37,15 +38,15 @@ function CommentRow({
   const [editing, setEditing] = useState(false);
 
   return (
-    <div className="rounded-md border border-gs-gray/15 bg-white p-4 text-sm">
-      <div className="flex items-center justify-between">
+    <div className="min-w-0 overflow-hidden rounded-md border border-gs-gray/15 bg-white p-4 text-sm">
+      <div className="flex items-center justify-between gap-3">
         <span className="font-medium">{comment.author.name}</span>
         <span className="text-xs text-gs-gray">
           {localStamp(comment.createdAt, viewerLocation)}
           {comment.isEdited && " · edited"}
         </span>
       </div>
-      <p className="mt-1 whitespace-pre-wrap">{comment.text}</p>
+      <LinkifiedText text={comment.text} className="mt-1" />
       <div className="mt-2 flex gap-3 text-xs">
         {canEdit && !editing && (
           <button type="button" onClick={() => setEditing(true)} className="text-gs-gray hover:text-gs-black">

@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/date-input";
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -87,7 +88,7 @@ export function MilestonesSection({
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-gs-gray">Due Date</label>
-            <input type="date" name="dueDate" required className="field field-sm" />
+            <DateInput name="dueDate" required className="field field-sm" />
           </div>
           <SubmitButton pendingLabel="Adding…" className="btn btn-dark btn-sm">
             Add
@@ -119,7 +120,7 @@ export function MilestonesSection({
                       </div>
                       <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-gs-gray">Due Date</label>
-                        <input type="date" name="dueDate" required defaultValue={m.dueInput} className="field field-sm" />
+                        <DateInput name="dueDate" required defaultValue={m.dueInput} className="field field-sm" />
                       </div>
                       <SubmitButton pendingLabel="Saving…" className="btn btn-dark btn-sm">
                         Save

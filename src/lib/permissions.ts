@@ -391,6 +391,9 @@ export async function canViewProject(user: CurrentUser, project: ProjectWithGrou
 
   if (isProjectLead(user, project)) return true;
 
+  // The project's designated Account Manager, whichever cluster the project sits in.
+  if (project.accountManagerId === user.id) return true;
+
   // A Lead or Contributor with no Task Group here can still see the project if it
   // contains a task assigned to them.
   const ownTaskOnProject = await prisma.task.findFirst({
@@ -534,11 +537,8 @@ export function canSelfCreateInGroup(
 
 export function canCreateTaskInGroup(user: CurrentUser, project: ProjectWithGroups) {
   if (isAdmin(user)) return true;
-  // The Social Media Lead's only path to originate work is the Content Calendar (see
-  // createCalendarEntry) — she never gets the generic New Task form, in her own group or
-  // anyone else's, so every calendar-originated task carries its Publish Date/Content Type
-  // metadata rather than slipping in as an untracked ad hoc task.
-  if (isSocialMediaLead(user)) return false;
+  // The Social Media Lead creates and assigns tasks like every other Lead (her calendar entries still go through
+  // the Content Calendar, which is what attaches their Publish Date / Content Type).
   if (isProjectLead(user, project)) return true;
   if (project.accountManagerId === user.id) return true;
   return clusterHeadReachesProject(user, project);
@@ -660,6 +660,14 @@ export function canEditTaskAttributes(user: CurrentUser, project: Project, group
 }
 
 /**
+ * Edit a task's description after creation: whoever created or owns the task, plus the people who manage it
+ * (the group Lead, oversight roles, Admin — canEditTaskAttributes).
+ */
+export function canEditTaskDescription(user: CurrentUser, project: Project, group: TaskGroupRef | null, task: Task) {
+  return task.createdById === user.id || task.assignedToId === user.id || canEditTaskAttributes(user, project, group);
+}
+
+/**
  * Subtasks stay locked to their creator (PRD v1.1 decision #11) — anyone who can see
  * the parent task and either owns it or has task authority on its group can add one,
  * but the subtask's assignee is always the creator, immutable thereafter.
@@ -747,8 +755,7 @@ export const SOCIAL_MEDIA_POD_NAME = "Social Media";
 export const CONTENT_POD_NAME = "Content";
 
 /** Presence-only: does this user hold the Lead role for the Social Media pod at all
- * (one role per user, so this is a fixed identity, not a per-project check)? Used to
- * gate the generic New Task form off entirely for her — see canCreateTaskInGroup. */
+ * (one role per user, so this is a fixed identity, not a per-project check)? */
 export function isSocialMediaLead(user: CurrentUser) {
   return user.roles.some((r) => r.role === "LEAD" && r.pod?.name === SOCIAL_MEDIA_POD_NAME);
 }

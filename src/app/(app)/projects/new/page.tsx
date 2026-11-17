@@ -1,3 +1,4 @@
+import { DateInput } from "@/components/date-input";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
@@ -140,10 +141,10 @@ export default async function NewProjectPage() {
             <Section title="Schedule & hours" description="Dates and the hours budget the team works within.">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Start Date" htmlFor="startDate">
-                  <input id="startDate" name="startDate" type="date" className="field" />
+                  <DateInput id="startDate" name="startDate" className="field" />
                 </Field>
                 <Field label="Deadline" htmlFor="deadline">
-                  <input id="deadline" name="deadline" type="date" className="field" />
+                  <DateInput id="deadline" name="deadline" className="field" />
                 </Field>
               </div>
 

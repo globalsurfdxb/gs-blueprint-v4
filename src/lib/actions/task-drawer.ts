@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { canViewTask, canAssignTaskToSprint, canEditTaskAttributes, canLogTime, isAdmin } from "@/lib/permissions";
+import { canViewTask, canAssignTaskToSprint, canEditTaskAttributes, canLogTime, canEditTaskDescription, isAdmin } from "@/lib/permissions";
 import { resolveTaskAssigneeContext } from "@/lib/task-assignment";
 import { getTaskRound } from "@/lib/task-chain";
 import { formatDate } from "@/lib/format";
@@ -58,6 +58,7 @@ export type TaskDrawerData = {
   canEditAttributes: boolean;
   // Read-only detail, so the drawer shows the whole task without opening the full page.
   description: string | null;
+  canEditDescription: boolean;
   stepsToReproduce: string | null;
   environmentLabel: string | null;
   createdByName: string;
@@ -190,6 +191,7 @@ async function loadTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
     sprints,
     canEditAttributes: canEditTaskAttributes(user, project, group),
     description: task.description,
+    canEditDescription: canEditTaskDescription(user, project, group, task),
     stepsToReproduce: task.stepsToReproduce,
     environmentLabel: task.environment ? ENVIRONMENT_LABELS[task.environment] ?? task.environment : null,
     createdByName: task.createdBy.name,

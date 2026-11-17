@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatDate } from "@/lib/format";
 import { SEVERITY_VALUES, SEVERITY_LABELS, ENVIRONMENT_VALUES, ENVIRONMENT_LABELS } from "@/lib/bug";
 import { Select } from "@/components/select";
 import type { TaskCreateOptions } from "@/lib/actions/task-create";
@@ -120,7 +121,7 @@ export function BugReportFields({
             <option value="">Not in a bug sprint</option>
             {bugSprints.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.name} · due {new Date(b.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                {b.name} · due {formatDate(b.dueDate)}
               </option>
             ))}
           </Select>

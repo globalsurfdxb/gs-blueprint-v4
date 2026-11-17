@@ -1,3 +1,4 @@
+import { DateInput } from "@/components/date-input";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
@@ -109,11 +110,11 @@ export default async function SearchPage({
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Due From</span>
-              <input type="date" name="dueFrom" defaultValue={params.dueFrom} className={fieldClass} />
+              <DateInput name="dueFrom" defaultValue={params.dueFrom} className={fieldClass} />
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Due To</span>
-              <input type="date" name="dueTo" defaultValue={params.dueTo} className={fieldClass} />
+              <DateInput name="dueTo" defaultValue={params.dueTo} className={fieldClass} />
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-gs-gray">Timer Status</span>

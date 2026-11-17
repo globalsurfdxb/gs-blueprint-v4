@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/date-input";
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { createTaskInDrawer } from "@/lib/actions/tasks";
@@ -239,7 +240,7 @@ function CreateForm({
               <label htmlFor="create-desc" className={labelClass}>
                 Description <span className="font-normal text-gs-gray">(optional)</span>
               </label>
-              <textarea id="create-desc" name="description" rows={3} className={fieldClass} />
+              <textarea id="create-desc" name="description" rows={5} className={`${fieldClass} resize-y`} />
             </div>
 
             <AssigneeField
@@ -288,7 +289,7 @@ function CreateForm({
                 <label htmlFor="create-due" className={labelClass}>
                   Due Date <span className="text-gs-red">*</span>
                 </label>
-                <input id="create-due" name="dueDate" type="date" required className={fieldClass} />
+                <DateInput id="create-due" name="dueDate" required className={fieldClass} />
               </div>
             </div>
           </TaskTypeProvider>

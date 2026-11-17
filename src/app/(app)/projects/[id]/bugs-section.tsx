@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/date-input";
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { BUG_PROGRESS_LABELS, SprintProgress } from "@/components/sprint-progress";
@@ -203,7 +204,7 @@ function BugSprintPanel({
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-gs-gray">Due date</label>
-                <input type="date" name="dueDate" defaultValue={sprint.dueInput} required className="field field-sm" />
+                <DateInput name="dueDate" defaultValue={sprint.dueInput} required className="field field-sm" />
               </div>
               <SubmitButton pendingLabel="Saving…" className="btn btn-dark btn-sm">
                 Save
@@ -320,7 +321,7 @@ function NewBugSprintForm({ action, onDone }: { action: (formData: FormData) => 
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="new-bug-sprint-due" className="text-xs font-medium text-gs-gray">Due date</label>
-          <input id="new-bug-sprint-due" type="date" name="dueDate" required className="field field-sm" />
+          <DateInput id="new-bug-sprint-due" name="dueDate" required className="field field-sm" />
         </div>
         <SubmitButton pendingLabel="Creating…" className="btn btn-dark btn-sm">
           Create bug sprint

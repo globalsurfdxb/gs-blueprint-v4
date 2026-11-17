@@ -34,6 +34,10 @@ export type ViewTask = {
   // Sprint-wise board (final build) — the task's Sprint, so the board can be scoped to one
   // specific sprint (Planned/Active/Completed) when opened from a Sprint card. null = Backlog.
   sprintId?: string | null;
+  /** The sprint's name, shown on the card when the task is in one. */
+  sprintName?: string | null;
+  /** A bug's bug sprint (Frontend, Backend…), shown on the card when it is in one. */
+  bugSprintName?: string | null;
   // Cross-project surfaces (My Tasks) set this so each card shows which project it belongs to;
   // single-project surfaces (a project board) leave it undefined and nothing extra renders.
   projectName?: string;
@@ -127,6 +131,16 @@ function CardMeta({ t, hideProject = false }: { t: ViewTask; hideProject?: boole
       </span>
       {t.assigneeName && <span>Assigned to {t.assigneeName}</span>}
       {t.createdByName && <span>Created by {t.createdByName}</span>}
+      {t.sprintName && (
+        <span>
+          Sprint <span className="font-medium text-gs-black/80">{t.sprintName}</span>
+        </span>
+      )}
+      {t.bugSprintName && (
+        <span>
+          Bug sprint <span className="font-medium text-gs-black/80">{t.bugSprintName}</span>
+        </span>
+      )}
       {!hideProject && (t.projectLabel ?? t.projectName) && (
         <span className="font-medium">{t.projectLabel ?? t.projectName}</span>
       )}
@@ -502,6 +516,7 @@ export function TaskViews({
   kanbanView,
   focusSprint,
   extraView,
+  defaultMode = "list",
   children,
 }: {
   surfacePath: string;
@@ -526,10 +541,12 @@ export function TaskViews({
    * Used by My Tasks for the Today/Tomorrow/This Week bucketed view — omitted everywhere else,
    * so no other surface gains the option. */
   extraView?: { mode: string; label: string; content: React.ReactNode };
+  /** The view shown until the person picks one themselves (their choice is remembered per page). */
+  defaultMode?: string;
   children: React.ReactNode;
 }) {
   const storageKey = `gsb:view:${surfacePath}`;
-  const [mode, setMode] = useState<string>("list");
+  const [mode, setMode] = useState<string>(defaultMode);
   const [activeSprintOnly, setActiveSprintOnly] = useState(false);
   const [filters, setFilters] = useState<BoardFilters>(NO_FILTERS);
   const setFilter = (key: keyof BoardFilters, value: string) => setFilters((f) => ({ ...f, [key]: value }));

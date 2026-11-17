@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/date-input";
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Select } from "@/components/select";
@@ -50,11 +51,11 @@ export function NewSprintPanel({ projects }: { projects: { id: string; name: str
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="new-sprint-start" className="text-xs font-medium text-gs-gray">Start</label>
-            <input id="new-sprint-start" type="date" name="startDate" required className="field field-sm" />
+            <DateInput id="new-sprint-start" name="startDate" required className="field field-sm" />
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor="new-sprint-end" className="text-xs font-medium text-gs-gray">End</label>
-            <input id="new-sprint-end" type="date" name="endDate" required className="field field-sm" />
+            <DateInput id="new-sprint-end" name="endDate" required className="field field-sm" />
           </div>
           <SubmitButton pendingLabel="Creating…" className="btn btn-dark btn-sm">
             Create sprint

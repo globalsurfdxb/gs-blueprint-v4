@@ -1,3 +1,4 @@
+import { DateInput } from "@/components/date-input";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { Select } from "@/components/select";
 
@@ -27,7 +28,7 @@ export function AddSubtaskForm({ action }: { action: (formData: FormData) => voi
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-gs-gray">Due Date</label>
-        <input name="dueDate" type="date" required className="field" />
+        <DateInput name="dueDate" required className="field" />
       </div>
       <SubmitButton
         pendingLabel="Adding…"

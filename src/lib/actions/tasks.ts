@@ -15,6 +15,7 @@ import {
   canReassignBugWithinGroup,
   isRoleContributorInGroup,
   canDeleteTask,
+  canEditTaskDescription,
 } from "@/lib/permissions";
 import { notifyUsers } from "@/lib/notifications";
 import { runAction } from "@/lib/run-action";
@@ -282,6 +283,27 @@ export async function createTaskInDrawer(projectId: string, formData: FormData) 
         data: links.map((l) => ({ taskId, url: l.url, label: l.label || "Screenshot", addedById: user.id })),
       });
     }
+    return { ok: true as const };
+  });
+}
+
+/** Set or change a task's description. No length limit — it is plain text kept as-is. */
+export async function updateTaskDescription(taskId: string, formData: FormData) {
+  return runAction(async () => {
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Your session has expired. Please sign in again.");
+    const task = await prisma.task.findUnique({ where: { id: taskId } });
+    if (!task) throw new Error("This task no longer exists.");
+    const project = await prisma.project.findUnique({ where: { id: task.projectId } });
+    if (!project) throw new Error("This task's project no longer exists.");
+    const group = task.groupId ? await prisma.taskGroup.findUnique({ where: { id: task.groupId } }) : null;
+    if (!canEditTaskDescription(user, project, group, task)) {
+      throw new Error("Only the task's creator, its assignee or its team Lead can change the description.");
+    }
+    const text = String(formData.get("description") ?? "").trim();
+    await prisma.task.update({ where: { id: taskId }, data: { description: text.length > 0 ? text : null } });
+    revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
+    revalidatePath(`/projects/${task.projectId}`);
     return { ok: true as const };
   });
 }

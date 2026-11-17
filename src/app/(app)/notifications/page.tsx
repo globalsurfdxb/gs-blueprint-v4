@@ -4,8 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { markNotificationRead, markAllNotificationsRead } from "@/lib/actions/notifications";
 import { RESOLVED_REMINDER } from "@/lib/notification-scope";
-import { formatDateTime } from "@/lib/format";
-import { addDays, getLocalDateString } from "@/lib/timezone";
+import { formatDate } from "@/lib/format";
+import { addDays, formatLocalDateTime, getLocalDateString } from "@/lib/timezone";
 import { TILE_ICONS, type TileIcon } from "@/components/dashboard-ui";
 import { PageHeader } from "@/components/page-header";
 import { ActionForm } from "@/components/action-form";
@@ -82,12 +82,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
       ? "Today"
       : key === yesterdayKey
         ? "Yesterday"
-        : new Date(`${key}T00:00:00Z`).toLocaleDateString("en-GB", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            timeZone: "UTC",
-          });
+        : formatDate(key);
   const days: { key: string; items: typeof shown }[] = [];
   for (const n of shown) {
     const key = getLocalDateString(user.location, n.createdAt);
@@ -179,7 +174,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                         )}
                         <p className={`text-sm leading-snug ${n.isRead ? "text-gs-black/75" : "font-medium text-gs-black"}`}>{n.message}</p>
                         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gs-gray">
-                          <span>{formatDateTime(n.createdAt)}</span>
+                          <span title={`Shown in ${user.location === "INDIA" ? "India (IST)" : "Dubai (GST)"} time`}>{formatLocalDateTime(n.createdAt, user.location)}</span>
                           {view === "team" && assignee && (
                             <span className="rounded-full bg-gs-light px-2 py-0.5 font-medium">Assigned to {assignee}</span>
                           )}

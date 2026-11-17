@@ -22,7 +22,9 @@ export function BugDashboardSection({ data }: { data: BugDashboardData }) {
   return (
     <section className="mt-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-gs-gray after:h-px after:flex-1 after:bg-gs-gray/15">Bugs</h2>
+        <h2 className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-gs-gray after:h-px after:flex-1 after:bg-gs-gray/15">
+          <Link href="/bugs" className="hover:text-gs-red">Bugs</Link>
+        </h2>
         <Link href="/bugs" className="text-sm font-medium text-gs-red hover:underline">
           Open Bugs →
         </Link>
@@ -66,7 +68,7 @@ export function BugDashboardSection({ data }: { data: BugDashboardData }) {
       </div>
 
       <div className="mt-6 grid items-start gap-6">
-        <SectionCard title="Bug Sprints" count={data.sprints.length}>
+        <SectionCard title="Bug Sprints" href="/bugs?show=sprints" count={data.sprints.length}>
           {data.sprints.length === 0 ? (
             <EmptyState text="No bug sprints yet — create one from a project's Bugs tab." />
           ) : (
@@ -99,7 +101,7 @@ export function BugDashboardSection({ data }: { data: BugDashboardData }) {
           )}
         </SectionCard>
 
-        <SectionCard title="Overdue Bugs" count={data.overdueBugs.length}>
+        <SectionCard title="Overdue Bugs" href="/bugs" count={data.overdueBugs.length}>
           {data.overdueBugs.length === 0 ? (
             <EmptyState text="No overdue bugs." />
           ) : (

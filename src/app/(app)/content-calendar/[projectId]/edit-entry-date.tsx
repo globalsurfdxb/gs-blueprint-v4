@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/date-input";
 import { useState } from "react";
 import { formatDate, addWorkingDays } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
@@ -49,8 +50,7 @@ export function EditEntryDate({
 
   return (
     <ActionForm action={action} className="flex flex-wrap items-center gap-2">
-      <input
-        type="date"
+      <DateInput
         name="publishDate"
         required
         defaultValue={publishDateIso}

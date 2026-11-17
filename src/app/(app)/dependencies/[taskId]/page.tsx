@@ -5,9 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { statusLabel } from "@/lib/bug";
 import { getTaskRound } from "@/lib/task-chain";
 import { isCrossDepartmentTask } from "@/lib/dependency-tracker";
-import { formatDate, formatDateTime } from "@/lib/format";
-import { daysOverdue } from "@/lib/timezone";
+import { formatDate } from "@/lib/format";
+import { daysOverdue, formatLocalDateTime } from "@/lib/timezone";
 import { PageHeader } from "@/components/page-header";
+import { LinkifiedText } from "@/components/linkified-text";
 
 /**
  * Read-only task view for a Dependency Tracker (PRD 8.13, v1.26). Deliberately a dedicated
@@ -148,9 +149,9 @@ export default async function DependencyTaskPage({ params }: { params: Promise<{
             {task.comments.map((c) => (
               <div key={c.id} className="rounded-lg border border-gs-gray/15 bg-white px-4 py-3 text-sm">
                 <p className="text-xs text-gs-gray">
-                  {c.author.name} · {formatDateTime(c.createdAt)}{c.isEdited ? " · edited" : ""}
+                  {c.author.name} · {formatLocalDateTime(c.createdAt, user.location)}{c.isEdited ? " · edited" : ""}
                 </p>
-                <p className="mt-1 whitespace-pre-wrap">{c.text}</p>
+                <LinkifiedText text={c.text} className="mt-1" />
               </div>
             ))}
           </div>

@@ -281,3 +281,42 @@ export async function changeTaskStatusByDrag(taskId: string, targetStatus: strin
     return result;
   });
 }
+
+/**
+ * Move several tasks to one status in a single step (a Lead working through a review queue). Every task goes through
+ * changeTaskStatusByDrag, so each is checked on its own exactly like a single move — permissions, "one step at a time",
+ * a bug's QA-only close — and any that can't move are skipped and counted with the reason.
+ */
+export async function changeStatusInBulk(surfacePath: string, formData: FormData) {
+  return runAction(async () => {
+    await requireUser();
+    const taskIds = Array.from(new Set(formData.getAll("taskId").map(String).filter(Boolean)));
+    const target = String(formData.get("targetStatus") ?? "");
+    if (taskIds.length === 0) throw new Error("Tick at least one task.");
+    if (!["IN_PROGRESS", "REVIEW", "COMPLETED"].includes(target)) throw new Error("Choose the status to move them to.");
+
+    let moved = 0;
+    const reasons = new Map<string, number>();
+    for (const id of taskIds) {
+      const result = await changeTaskStatusByDrag(id, target, surfacePath);
+      if (typeof result === "object" && result !== null && (result as { ok?: boolean }).ok === false) {
+        const reason = (result as { error?: string }).error ?? "Couldn't be moved.";
+        reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+      } else {
+        moved += 1;
+      }
+    }
+    if (moved === 0) throw new Error([...reasons.keys()][0] ?? "None of the selected tasks could be moved.");
+
+    const skipped = taskIds.length - moved;
+    revalidatePath(surfacePath);
+    return {
+      ok: true as const,
+      moved,
+      notice:
+        skipped > 0
+          ? `${skipped} ${skipped === 1 ? "task was" : "tasks were"} skipped: ${[...reasons.keys()].slice(0, 2).join(" ")}`
+          : undefined,
+    };
+  });
+}

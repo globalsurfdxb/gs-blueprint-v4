@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/date-input";
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { SprintProgress } from "@/components/sprint-progress";
@@ -339,8 +340,7 @@ function SprintPanel({
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-gs-gray">Start</label>
-                <input
-                  type="date"
+                <DateInput
                   name="startDate"
                   defaultValue={sprint.startInput}
                   required
@@ -350,8 +350,7 @@ function SprintPanel({
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium text-gs-gray">End</label>
-                <input
-                  type="date"
+                <DateInput
                   name="endDate"
                   defaultValue={sprint.endInput}
                   required
@@ -438,11 +437,11 @@ function NewSprintForm({
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-gs-gray">Start</label>
-          <input type="date" name="startDate" required className="field field-sm" />
+          <DateInput name="startDate" required className="field field-sm" />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-gs-gray">End</label>
-          <input type="date" name="endDate" required className="field field-sm" />
+          <DateInput name="endDate" required className="field field-sm" />
         </div>
       </div>
 

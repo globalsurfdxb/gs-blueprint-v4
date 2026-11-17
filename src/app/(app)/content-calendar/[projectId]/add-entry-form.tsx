@@ -1,5 +1,6 @@
 "use client";
 
+import { DateInput } from "@/components/date-input";
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { formatDate } from "@/lib/format";
@@ -55,14 +56,13 @@ export function AddEntryForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="publishDate" className="text-sm font-medium">Publish Date</label>
-          <input
+          <DateInput
             id="publishDate"
             name="publishDate"
-            type="date"
             required
             min={minPublishDate}
             value={publishDate}
-            onChange={(e) => setPublishDate(e.target.value)}
+            onValueChange={(v) => setPublishDate(v)}
             className="field"
           />
         </div>

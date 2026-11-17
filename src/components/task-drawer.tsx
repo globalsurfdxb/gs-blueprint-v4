@@ -14,6 +14,9 @@ import { addComment } from "@/lib/actions/comments";
 import { startTimer, stopTimer } from "@/lib/actions/time-tracking";
 import { LiveElapsed } from "@/components/live-elapsed";
 import { formatDuration } from "@/lib/format";
+import { LinkifiedText } from "@/components/linkified-text";
+import { TaskDescriptionEditor } from "@/components/task-description-editor";
+import { updateTaskDescription } from "@/lib/actions/tasks";
 import { getCreatableProjects, getTaskCreateOptions, type TaskCreateOptions } from "@/lib/actions/task-create";
 import { CreateTaskPanel } from "@/components/create-task-panel";
 import { formatLocalDate, formatLocalTime } from "@/lib/timezone";
@@ -517,18 +520,28 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                   </div>
 
                   {/* Everything else about the task, read-only — so nothing needs the full page just to be read. */}
-                  {(data.description || data.stepsToReproduce) && (
+                  {(data.description || data.stepsToReproduce || data.canEditDescription) && (
                     <div className="mt-6 flex flex-col gap-4 border-t border-gs-gray/10 pt-5">
-                      {data.description && (
+                      {(data.description || data.canEditDescription) && (
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Description</p>
-                          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{data.description}</p>
+                          <div className="mt-1.5">
+                            <TaskDescriptionEditor
+                              description={data.description}
+                              canEdit={data.canEditDescription}
+                              action={updateTaskDescription.bind(null, data.id)}
+                              onSaved={() => {
+                                void load(data.id);
+                                router.refresh();
+                              }}
+                            />
+                          </div>
                         </div>
                       )}
                       {data.stepsToReproduce && (
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-gs-gray">Steps to reproduce</p>
-                          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{data.stepsToReproduce}</p>
+                          <LinkifiedText text={data.stepsToReproduce} className="mt-1.5 text-sm leading-relaxed" />
                         </div>
                       )}
                     </div>
@@ -646,7 +659,7 @@ export function TaskDrawerProvider({ children }: { children: React.ReactNode }) 
                             <p className="text-[11px] text-gs-gray">
                               <span className="font-medium text-gs-black/80">{c.author.name}</span> · {formatLocalDate(new Date(c.createdAt), data.viewerLocation)} {formatLocalTime(new Date(c.createdAt), data.viewerLocation)}{c.isEdited ? " · edited" : ""}
                             </p>
-                            <p className="mt-1 whitespace-pre-wrap">{c.text}</p>
+                            <LinkifiedText text={c.text} className="mt-1" />
                           </div>
                         ))
                       )}

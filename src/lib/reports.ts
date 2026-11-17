@@ -63,10 +63,12 @@ function getReportScopeRaw(user: CurrentUser): ReportScope {
   const acs = user.roles.find((r) => r.role === "ACCOUNT_CLIENT_SERVICES");
   if (acs) {
     const cid = acs.clusterId ?? "";
+    // Their cluster's projects, plus any project they are the designated Account Manager of — even one that sits in
+    // another cluster (e.g. Branding & Creatives in Creative Studio).
     return {
       label: acs.cluster?.name ?? "Your cluster",
-      taskWhere: { project: { clusterId: cid } },
-      projectWhere: { clusterId: cid },
+      taskWhere: { OR: [{ project: { clusterId: cid } }, { project: { accountManagerId: user.id } }] },
+      projectWhere: { OR: [{ clusterId: cid }, { accountManagerId: user.id }] },
     };
   }
 

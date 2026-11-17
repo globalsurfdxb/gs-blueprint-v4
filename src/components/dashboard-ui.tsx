@@ -124,6 +124,7 @@ export function StatCard({
 export function SectionCard({
   id,
   title,
+  href,
   count,
   className = "",
   children,
@@ -131,6 +132,8 @@ export function SectionCard({
   /** Anchor id, so a tile or pill elsewhere on the page can link here ("#overdue-tasks"). */
   id?: string;
   title: string;
+  /** Makes the title a link to the full list or report this card summarises. */
+  href?: string;
   /** Item count badge beside the title; red when > 0 so a non-empty problem list stands out. */
   count?: number;
   className?: string;
@@ -142,7 +145,14 @@ export function SectionCard({
       className={`scroll-mt-24 overflow-hidden rounded-2xl border border-gs-gray/10 bg-white shadow-sm [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-gs-light/50 ${className}`}
     >
       <h2 className="flex items-center gap-2.5 border-b border-gs-gray/10 px-5 py-4 font-heading text-base font-semibold tracking-tight">
-        {title}
+        {href ? (
+          <Link href={href} className="inline-flex items-center gap-1.5 transition-colors hover:text-gs-red">
+            {title}
+            <span aria-hidden className="text-sm font-normal text-gs-gray/60">→</span>
+          </Link>
+        ) : (
+          title
+        )}
         {count !== undefined && (
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
@@ -200,12 +210,10 @@ export function greetingFor(location: string): { greeting: string; dateLabel: st
   const now = new Date();
   const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone }).format(now)) % 24;
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const dateLabel = new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone,
-  }).format(now);
+  // "Tuesday, 27/10/2026" — the weekday in words, the date in the agency-wide DD/MM/YYYY.
+  const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone }).format(now);
+  const dayMonthYear = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone }).format(now);
+  const dateLabel = `${weekday}, ${dayMonthYear}`;
   return { greeting, dateLabel };
 }
 

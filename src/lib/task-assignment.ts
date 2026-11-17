@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { CurrentUser } from "@/lib/auth";
 import type { Task } from "@/generated/prisma/client";
-import { canReassignTask, canReassignBugWithinGroup, canAssignHandoffTask } from "@/lib/permissions";
+import { canReassignTask, canReassignBugWithinGroup, canAssignHandoffTask, CONTENT_POD_NAME, DESIGN_POD_NAME, SOCIAL_MEDIA_POD_NAME } from "@/lib/permissions";
 
 // Shared assignee-pool resolution for a task, used by both the full task-detail page and the
 // Dev/QA quick-edit drawer so the eligible pool and the reassign/bug rules never drift between
@@ -55,6 +55,25 @@ export async function resolveTaskAssigneeContext(
       canReassignBug && !canReassign && !canAssign ? podMembers.filter((r) => r.role === "CONTRIBUTOR") : podMembers;
     const byId = new Map(eligible.filter((r) => r.user.isActive).map((r) => [r.user.id, r.user]));
     assignees = Array.from(byId.values()).map((u) => ({ id: u.id, name: u.name }));
+
+    // Social Media's calendar work runs through Content, then Design: its Lead can hand a task to those teams' Leads on
+    // the same project even though they sit in other pods.
+    if (group.podId && (canAssign || canReassign)) {
+      const pod = await prisma.pod.findUnique({ where: { id: group.podId }, select: { name: true } });
+      if (pod?.name === SOCIAL_MEDIA_POD_NAME) {
+        const partners = await prisma.taskGroup.findMany({
+          where: { projectId: task.projectId, pod: { name: { in: [CONTENT_POD_NAME, DESIGN_POD_NAME] } } },
+          include: { lead: true },
+        });
+        const known = new Set(assignees.map((a) => a.id));
+        for (const g of partners) {
+          if (g.lead.isActive && !known.has(g.lead.id)) {
+            known.add(g.lead.id);
+            assignees.push({ id: g.lead.id, name: g.lead.name });
+          }
+        }
+      }
+    }
   }
 
   return { canAssign, canReassign, canReassignBug, assignees };

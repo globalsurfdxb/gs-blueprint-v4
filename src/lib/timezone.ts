@@ -66,3 +66,13 @@ export function formatLocalTime(atUtc: Date, location: string): string {
   const hour12 = hours % 12 === 0 ? 12 : hours % 12;
   return `${hour12}:${minutes.toString().padStart(2, "0")} ${period}`;
 }
+
+/** Short zone name for a location, so a time is never ambiguous: Dubai → "GST", India → "IST". */
+export function timeZoneAbbr(location: string): string {
+  return location === "INDIA" ? "IST" : location === "DUBAI" ? "GST" : "UTC";
+}
+
+/** Date + time in the viewer's own wall clock with its zone, e.g. "17/11/2026, 4:35 PM GST". */
+export function formatLocalDateTime(atUtc: Date, location: string): string {
+  return `${formatLocalDate(atUtc, location)}, ${formatLocalTime(atUtc, location)} ${timeZoneAbbr(location)}`;
+}

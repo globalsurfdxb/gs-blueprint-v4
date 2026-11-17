@@ -1,3 +1,4 @@
+import { DateInput } from "@/components/date-input";
 import Link from "next/link";
 import { AutoFilterForm } from "@/components/auto-filter-form";
 import { notFound, redirect } from "next/navigation";
@@ -146,11 +147,11 @@ export default async function DependencyProjectsPage({
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="from" className="text-xs font-medium text-gs-gray">From</label>
-          <input id="from" type="date" name="from" defaultValue={from ?? ""} className="field field-sm" />
+          <DateInput id="from" name="from" defaultValue={from ?? ""} className="field field-sm" />
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="to" className="text-xs font-medium text-gs-gray">To</label>
-          <input id="to" type="date" name="to" defaultValue={to ?? ""} className="field field-sm" />
+          <DateInput id="to" name="to" defaultValue={to ?? ""} className="field field-sm" />
         </div>
         {anyFilter && (
           <Link href={`/dependencies/projects?project=${projectParam}`} className="flex min-h-9 items-center px-2 text-sm text-gs-gray hover:underline">Clear</Link>

@@ -1,3 +1,4 @@
+import { DateInput } from "@/components/date-input";
 import Link from "next/link";
 import { AutoFilterForm } from "@/components/auto-filter-form";
 import { redirect } from "next/navigation";
@@ -130,11 +131,11 @@ Active cross-department work on the projects you coordinate — view only. Compl
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="from" className="text-xs font-medium text-gs-gray">From</label>
-          <input id="from" type="date" name="from" defaultValue={from ?? ""} className="field field-sm" />
+          <DateInput id="from" name="from" defaultValue={from ?? ""} className="field field-sm" />
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="to" className="text-xs font-medium text-gs-gray">To</label>
-          <input id="to" type="date" name="to" defaultValue={to ?? ""} className="field field-sm" />
+          <DateInput id="to" name="to" defaultValue={to ?? ""} className="field field-sm" />
         </div>
         <label className="flex min-h-9 items-center gap-2 text-sm text-gs-gray">
           <input type="checkbox" name="overdue" value="1" defaultChecked={overdueOn} className="h-4 w-4 rounded border-gs-gray/40" />

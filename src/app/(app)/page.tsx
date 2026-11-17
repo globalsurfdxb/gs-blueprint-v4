@@ -87,7 +87,7 @@ function SprintProgressSection({ data }: { data: SprintProgressData }) {
   if (!data.inScope) return null;
   return (
     <div className="flex flex-col gap-8">
-      <SectionCard title="Sprint Progress">
+      <SectionCard title="Sprint Progress" href="/sprints">
         {data.sprints.length === 0 ? (
           <p className="px-4 py-4 text-sm text-gs-gray">No active or planned sprints in scope.</p>
         ) : (
@@ -107,7 +107,7 @@ function SprintProgressSection({ data }: { data: SprintProgressData }) {
                 {data.sprints.map((s) => (
                   <tr key={s.id} className="border-t border-gs-gray/10">
                     <td className="px-4 py-2.5">
-                      <Link href={`/projects/${s.projectId}`} className="font-medium hover:underline">{s.name}</Link>
+                      <Link href={`/projects/${s.projectId}?tab=sprints&sprint=${s.id}`} className="font-medium hover:underline">{s.name}</Link>
                     </td>
                     <td className="whitespace-nowrap px-4 py-2.5">
                       <ProjectLabel name={s.projectName} client={s.clientName} />
@@ -274,12 +274,12 @@ function LeadDashboard({
           )}
         </SectionCard>
 
-        <SectionCard title="Overdue Tasks" count={overdueN} className="xl:col-span-2">
+        <SectionCard title="Overdue Tasks" href="/my-reviews?view=overdue" count={overdueN} className="xl:col-span-2">
           <TaskRows tasks={data.overdueTasks} emptyText="Nothing overdue in your groups." />
         </SectionCard>
 
         {/* Revision-count highlighting: 1 = amber (normal), 2+ = red (flagged), same as the admin view. */}
-        <SectionCard title="Tasks With Revisions" count={data.revisionTasks.length} className="xl:col-span-2">
+        <SectionCard title="Tasks With Revisions" href="/my-reviews?view=flagged" count={data.revisionTasks.length} className="xl:col-span-2">
           {data.revisionTasks.length === 0 ? (
             <EmptyState text="No tasks in revision." />
           ) : (
@@ -405,10 +405,10 @@ export default async function DashboardPage() {
           <h2 className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-gs-gray after:h-px after:flex-1 after:bg-gs-gray/15">Needs attention</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
             <StatCard icon="alert" attention label="Overdue Tasks" value={data.overdueTasks.length} tone={data.overdueTasks.length > 0 ? "danger" : "default"} href="#overdue-tasks" />
-            <StatCard icon="revision" attention label="With Revisions" value={data.revisionTasks.length} tone={data.revisionTasks.length > 0 ? "warn" : "default"} />
-            <StatCard icon="clock" attention label="Hours at Risk" value={data.hoursRisk.length} tone={data.hoursRisk.length > 0 ? "warn" : "default"} />
-            <StatCard icon="hourglass" attention label="Bottlenecked" value={data.bottlenecks.length} tone={data.bottlenecks.length > 0 ? "warn" : "default"} />
-            <StatCard icon="flag" attention label="Not On Track" value={data.projectsNotOnTrack} tone={data.projectsNotOnTrack > 0 ? "danger" : "default"} />
+            <StatCard icon="revision" attention label="With Revisions" value={data.revisionTasks.length} tone={data.revisionTasks.length > 0 ? "warn" : "default"} href="#revision-tasks" />
+            <StatCard icon="clock" attention label="Hours at Risk" value={data.hoursRisk.length} tone={data.hoursRisk.length > 0 ? "warn" : "default"} href="#hours-risk" />
+            <StatCard icon="hourglass" attention label="Bottlenecked" value={data.bottlenecks.length} tone={data.bottlenecks.length > 0 ? "warn" : "default"} href="#bottlenecks" />
+            <StatCard icon="flag" attention label="Not On Track" value={data.projectsNotOnTrack} tone={data.projectsNotOnTrack > 0 ? "danger" : "default"} href="#on-track" />
           </div>
         </section>
 
@@ -419,7 +419,7 @@ export default async function DashboardPage() {
             <StatCard icon="list" label="Active Tasks" value={data.activeCount} />
             <StatCard icon="check" label="Completed Tasks" value={data.completedCount} />
             <StatCard icon="calendar" label="Due Today" value={data.dueTodayTasks.length} tone={data.dueTodayTasks.length > 0 ? "warn" : "default"} href={data.dueTodayTasks.length > 0 ? "#due-today" : undefined} />
-            <StatCard icon="timer" label="Running Timers" value={data.runningTimers.length} tone={data.runningTimers.length > 0 ? "warn" : "default"} />
+            <StatCard icon="timer" label="Running Timers" value={data.runningTimers.length} tone={data.runningTimers.length > 0 ? "warn" : "default"} href={data.runningTimers.length > 0 ? "#running-timers" : "/reports/time-logs"} />
           </div>
         </section>
       </div>
@@ -435,6 +435,7 @@ export default async function DashboardPage() {
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-2">
         {/* On-track rollup — cluster-by-cluster for Admin, pod-by-pod for a Cluster Head. */}
         <SectionCard
+          id="on-track"
           title={`On Track vs. Not — by ${data.onTrackGrouping}`}
           className={hasSideCards ? "" : "xl:col-span-2"}
         >
@@ -524,7 +525,7 @@ export default async function DashboardPage() {
         )}
 
         {data.runningTimers.length > 0 && (
-          <SectionCard title="Running Timers" count={data.runningTimers.length}>
+          <SectionCard id="running-timers" title="Running Timers" href="/reports/time-logs" count={data.runningTimers.length}>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[320px] text-sm">
                 <thead className="border-b border-gs-gray/10 bg-gs-light/60 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray">
@@ -550,12 +551,12 @@ export default async function DashboardPage() {
           </SectionCard>
         )}
 
-        <SectionCard id="overdue-tasks" title="Overdue Tasks" count={data.overdueTasks.length} className="xl:col-span-2">
+        <SectionCard id="overdue-tasks" title="Overdue Tasks" href="/reports/overdue" count={data.overdueTasks.length} className="xl:col-span-2">
           <TaskRows tasks={data.overdueTasks} emptyText="Nothing overdue in scope." />
         </SectionCard>
 
         {/* Revision-count highlighting: 1 = amber (normal), 2+ = red (flagged) per PRD 8.8. */}
-        <SectionCard title="Tasks With Revisions" count={data.revisionTasks.length} className="xl:col-span-2">
+        <SectionCard id="revision-tasks" title="Tasks With Revisions" count={data.revisionTasks.length} className="xl:col-span-2">
           {data.revisionTasks.length === 0 ? (
             <EmptyState text="No tasks in revision." />
           ) : (
@@ -600,7 +601,7 @@ export default async function DashboardPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Projects Approaching / Over Max Hours" count={data.hoursRisk.length} className="xl:col-span-2">
+        <SectionCard id="hours-risk" title="Projects Approaching / Over Max Hours" count={data.hoursRisk.length} className="xl:col-span-2">
           {data.hoursRisk.length === 0 ? (
             <EmptyState text="No projects near their hours cap." />
           ) : (
@@ -640,7 +641,7 @@ export default async function DashboardPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Bottlenecks — Stuck 3+ Days" count={data.bottlenecks.length} className="xl:col-span-2">
+        <SectionCard id="bottlenecks" title="Bottlenecks — Stuck 3+ Days" count={data.bottlenecks.length} className="xl:col-span-2">
           <TaskRows tasks={data.bottlenecks} emptyText="Nothing stuck in progress or review." />
         </SectionCard>
       </div>
