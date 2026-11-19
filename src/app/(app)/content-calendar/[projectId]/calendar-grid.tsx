@@ -84,7 +84,7 @@ export function CalendarGrid({
                       >
                         {e.urgent && <UrgentIcon className="h-3 w-3 shrink-0" />}
                         <span className="truncate">
-                          {e.urgent ? `Urgent${e.team ? ` · ${e.team}` : ""}` : (e.contentType ?? "Post")}
+                          {e.urgent ? (e.team ?? e.contentType ?? "Post") : (e.contentType ?? "Post")}
                         </span>
                       </Link>
                     ))}

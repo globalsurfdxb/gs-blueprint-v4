@@ -7,12 +7,15 @@ export function UrgentIcon({ className = "h-3.5 w-3.5" }: { className?: string }
   );
 }
 
-/** The "Urgent" tag shown on an urgent task in the Content Calendar. */
+/** The mark shown on an urgent task in the Content Calendar: just the bolt in a red dot (the row's tint does the rest). */
 export function UrgentTag() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-gs-red px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+    <span
+      title="Urgent task"
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gs-red text-white"
+    >
       <UrgentIcon className="h-3 w-3" />
-      Urgent
+      <span className="sr-only">Urgent</span>
     </span>
   );
 }

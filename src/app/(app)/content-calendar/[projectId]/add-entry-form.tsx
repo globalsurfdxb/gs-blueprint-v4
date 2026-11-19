@@ -53,7 +53,7 @@ export function AddEntryForm({
 
   return (
     <ActionForm action={action} successMessage="Calendar entry added." className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="publishDate" className="text-sm font-medium">Publish Date</label>
           <DateInput
@@ -117,7 +117,7 @@ export function AddEntryForm({
       </div>
       <SubmitButton
         pendingLabel="Adding…"
-        className="btn btn-primary self-start"
+        className="btn btn-primary min-w-40 self-start"
       >
         Add Entry
       </SubmitButton>

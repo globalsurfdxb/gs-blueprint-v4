@@ -23,7 +23,7 @@ export function MonthlyBriefForm({
         placeholder="This month's theme, key insights, links to decks..."
         className="field"
       />
-      <SaveButton className="btn btn-secondary self-start">
+      <SaveButton className="btn btn-secondary min-w-40 self-start">
         Save Brief
       </SaveButton>
     </ActionForm>
