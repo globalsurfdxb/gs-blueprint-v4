@@ -189,11 +189,20 @@ const MARKETING_CLUSTER_NAME = "Marketing & Strategy";
 /**
  * Does this person have a personal "My Tasks" list? Account Managers (cluster-scoped
  * Account/Client Services) oversee projects rather than being assigned work, so the My Tasks
- * module is not part of their access — nor is it for the Cluster Heads of the delivery and
- * Marketing & Strategy clusters, who oversee their teams from the dashboard instead.
+ * module is not part of their access — nor is it for the Cluster Head of the delivery cluster,
+ * who oversees the account managers from the dashboard instead. Marketing & Strategy Cluster Heads
+ * (e.g. the Social Media head) keep My Tasks: the work they plan and assign shows up there.
  */
 export function hasPersonalTaskList(user: CurrentUser) {
-  return !isAnyAccountClientServices(user) && !isDeliveryClusterHeadOnly(user) && !isMarketingClusterHead(user);
+  return !isAnyAccountClientServices(user) && !isDeliveryClusterHeadOnly(user);
+}
+
+/**
+ * A Cluster Head (not an Admin): their task page is "Tasks" — their own work plus everything their team is doing —
+ * rather than a personal "My Tasks" list.
+ */
+export function seesTeamTasks(user: CurrentUser) {
+  return !isAdmin(user) && user.roles.some((r) => r.role === "CLUSTER_HEAD");
 }
 
 /**
@@ -444,6 +453,11 @@ export async function canViewTask(
       task.contentTypeId !== null &&
       (await isProjectSocialMediaMember(user, project.id))
     ) {
+      return true;
+    }
+    // The project's own Social Media Lead also sees every other Content / Design task on that project (the posts those
+    // teams produce for her channels, whether or not they came from a calendar entry).
+    if (group && isCalendarPipelinePod(group.pod?.name) && isSocialMediaLead(user) && (await isProjectSocialMediaLead(user, project.id))) {
       return true;
     }
   } else if (canViewAllProjectGroups(user, project)) {
@@ -739,6 +753,20 @@ export function canRecordBugVerdict(
 }
 
 /**
+ * The project's own Social Media Lead reviews (approves or sends back) the Content / Design team's standard tasks on that
+ * project — they produce her channels' posts. Not for bugs, and not a group Lead's authority (that stays with the group).
+ */
+export async function isSocialMediaProjectReviewer(
+  user: CurrentUser,
+  group: { pod?: { name: string } | null } | null,
+  task: Task,
+): Promise<boolean> {
+  if (task.taskType === "BUG" || !group || !isCalendarPipelinePod(group.pod?.name)) return false;
+  if (!isSocialMediaLead(user)) return false;
+  return isProjectSocialMediaLead(user, task.projectId);
+}
+
+/**
  * On Hold is a Lead-level call, not the assignee's — a blocked Contributor comments on
  * the task instead, and their group's Lead decides whether to formally place it On Hold.
  */
@@ -950,6 +978,20 @@ export function canEditContentBody(user: CurrentUser, task: { assignedToId: stri
  */
 export function canManageContentCalendar(user: CurrentUser, group: TaskGroupRef | null) {
   return isAdmin(user) || (group !== null && isLeadOfGroup(user, group));
+}
+
+/**
+ * Raising an urgent task from the Content Calendar: the overseeing Social Media Cluster Head (a cluster head whose scope
+ * covers this project's Social Media group — Ashna) or an Admin. The Social Media Lead can see these tasks but doesn't
+ * raise them. `group` is the project's Social Media Task Group (null = none attached yet).
+ */
+export function canCreateUrgentCalendarTask(
+  user: CurrentUser,
+  group: { clusterId: string | null; podId: string | null } | null,
+) {
+  if (isAdmin(user)) return true;
+  if (group === null || group.clusterId === null) return false;
+  return clusterHeadInPodScope(user, group.clusterId, group.podId);
 }
 
 /**

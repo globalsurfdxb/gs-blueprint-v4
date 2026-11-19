@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { canViewTask, canAssignTaskToSprint, canEditTaskAttributes, canLogTime, canEditTaskDescription, isAdmin } from "@/lib/permissions";
+import { canViewTask, canAssignTaskToSprint, canEditTaskAttributes, canLogTime, canEditTaskDescription, isAdmin, isSocialMediaProjectReviewer } from "@/lib/permissions";
 import { resolveTaskAssigneeContext } from "@/lib/task-assignment";
 import { getTaskRound } from "@/lib/task-chain";
 import { formatDate } from "@/lib/format";
@@ -139,6 +139,7 @@ async function loadTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
     task,
     group,
     hasLoggedTime: await hasLoggedTime(task.id),
+    extraReviewer: await isSocialMediaProjectReviewer(user, group, task),
   });
   const assigneeCtx = await resolveTaskAssigneeContext(user, project, group, task);
 

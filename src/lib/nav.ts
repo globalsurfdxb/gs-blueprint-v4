@@ -6,6 +6,7 @@ import {
   canManageClients,
   canCreateClient,
   hasPersonalTaskList,
+  seesTeamTasks,
   canCreateProject,
   canAccessContentCalendar,
   canViewDashboard,
@@ -65,7 +66,7 @@ export function getNavItems(user: CurrentUser, opts: { isDependencyTracker?: boo
 
   items.push({ label: "Projects", href: "/projects" });
   if (hasPersonalTaskList(user)) {
-    items.push({ label: "My Tasks", href: "/my-tasks" });
+    items.push({ label: seesTeamTasks(user) ? "Tasks" : "My Tasks", href: "/my-tasks" });
   }
 
   // Sprints: only for people who actually have sprint work (a Sprint-enabled project in scope).

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { canAdvanceTask, canRecordBugVerdict, canToggleHoldTask } from "@/lib/permissions";
+import { canAdvanceTask, canRecordBugVerdict, canToggleHoldTask, isSocialMediaProjectReviewer } from "@/lib/permissions";
 import { notifyUsers } from "@/lib/notifications";
 import { runAction } from "@/lib/run-action";
 import { computeStatusOptions, explainBlockedMove } from "@/lib/task-status-flow";
@@ -36,7 +36,7 @@ async function loadTaskWithGroup(taskId: string) {
   const group = task.groupId
     ? await prisma.taskGroup.findUnique({
         where: { id: task.groupId },
-        include: { pod: { select: { bugTrackingEnabled: true } } },
+        include: { pod: { select: { name: true, bugTrackingEnabled: true } } },
       })
     : null;
   return { task, project, group };
@@ -94,7 +94,7 @@ async function approveTaskCore(taskId: string): Promise<Done> {
   // Bugs: closed after retest by a QA tester or the group Lead / Admin — never by the developers who fixed
   // them. Standard tasks stay strictly Lead-only.
   const verdictGroup = group ? { ...group, bugTrackingEnabled: group.pod?.bugTrackingEnabled } : null;
-  if (!canRecordBugVerdict(user, verdictGroup, task)) {
+  if (!canRecordBugVerdict(user, verdictGroup, task) && !(await isSocialMediaProjectReviewer(user, group, task))) {
     throw new Error(
       task.taskType === "BUG"
         ? "Only a QA tester, the team Lead or an Admin can close a bug once it is Ready for Retest."
@@ -134,7 +134,7 @@ async function sendToRevisionCore(taskId: string): Promise<Done> {
   // Bugs: reopened after a failed retest by a QA tester or the group Lead / Admin. Standard tasks stay
   // strictly Lead-only.
   const verdictGroup = group ? { ...group, bugTrackingEnabled: group.pod?.bugTrackingEnabled } : null;
-  if (!canRecordBugVerdict(user, verdictGroup, task)) {
+  if (!canRecordBugVerdict(user, verdictGroup, task) && !(await isSocialMediaProjectReviewer(user, group, task))) {
     throw new Error(
       task.taskType === "BUG"
         ? "Only a QA tester, the team Lead or an Admin can reopen a bug once it is Ready for Retest."
@@ -249,11 +249,12 @@ export async function changeTaskStatusByDrag(taskId: string, targetStatus: strin
     const { task, group } = await loadTaskWithGroup(taskId);
     const timeLogged = await hasLoggedTime(taskId);
 
-    const allowed = computeStatusOptions({ user, task, group, hasLoggedTime: timeLogged }).find(
+    const extraReviewer = await isSocialMediaProjectReviewer(user, group, task);
+    const allowed = computeStatusOptions({ user, task, group, hasLoggedTime: timeLogged, extraReviewer }).find(
       (o) => o.value === targetStatus && o.value !== task.status && !o.disabled,
     );
     if (!allowed) {
-      throw new Error(explainBlockedMove({ user, task, group, target: targetStatus, hasLoggedTime: timeLogged }));
+      throw new Error(explainBlockedMove({ user, task, group, target: targetStatus, hasLoggedTime: timeLogged, extraReviewer }));
     }
 
     let result: Done;

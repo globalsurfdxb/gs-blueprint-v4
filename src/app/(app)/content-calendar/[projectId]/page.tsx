@@ -1,9 +1,23 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { canManageContentCalendar, canViewContentCalendar, SOCIAL_MEDIA_POD_NAME, CONTENT_POD_NAME } from "@/lib/permissions";
+import {
+  canCreateUrgentCalendarTask,
+  canManageContentCalendar,
+  canViewContentCalendar,
+  SOCIAL_MEDIA_POD_NAME,
+  CONTENT_POD_NAME,
+  DESIGN_POD_NAME,
+} from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { createCalendarEntry, updateCalendarEntryDate, updateCalendarEntryTitle } from "@/lib/actions/content-calendar";
+import {
+  createCalendarEntry,
+  createUrgentCalendarTask,
+  updateCalendarEntryDate,
+  updateCalendarEntryTitle,
+} from "@/lib/actions/content-calendar";
+import { AddUrgentTaskForm, type UrgentTeam } from "./add-urgent-task-form";
+import { UrgentIcon, UrgentTag } from "./urgent-tag";
 import { upsertMonthlyBrief } from "@/lib/actions/monthly-briefs";
 import { MONTH_NAMES } from "@/lib/format";
 import { MonthYearPicker } from "./month-year-picker";
@@ -83,18 +97,39 @@ export default async function ContentCalendarPage({
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
 
-  const [monthlyBrief, entries, contentTypes] = await Promise.all([
+  // Urgent tasks (raised by the Social Media Cluster Head, possibly in the Design group too) show on the calendar
+  // beside the regular Content entries.
+  const canUrgent = canCreateUrgentCalendarTask(user, socialMediaGroup);
+  const [monthlyBrief, entries, contentTypes, designGroup] = await Promise.all([
     prisma.monthlyBrief.findUnique({ where: { projectId_month_year: { projectId, month, year } } }),
     prisma.task.findMany({
-      where: { projectId, groupId: contentGroup.id, publishDate: { gte: monthStart, lt: monthEnd } },
-      include: { contentType: true },
-      orderBy: { publishDate: "asc" },
+      where: {
+        projectId,
+        OR: [{ groupId: contentGroup.id }, { isUrgent: true }],
+        publishDate: { gte: monthStart, lt: monthEnd },
+      },
+      include: {
+        contentType: true,
+        group: { select: { pod: { select: { name: true } } } },
+        assignedTo: { select: { name: true } },
+      },
+      orderBy: [{ publishDate: "asc" }, { isUrgent: "desc" }],
     }),
     prisma.contentType.findMany({ orderBy: { name: "asc" } }),
+    prisma.taskGroup.findFirst({ where: { projectId, pod: { name: DESIGN_POD_NAME } }, include: { lead: true } }),
   ]);
+
+  // Teams the urgent-task form can send work to; each task goes to that team's Lead.
+  const urgentTeams: UrgentTeam[] = canUrgent
+    ? [
+        { groupId: contentGroup.id, name: "Content", leadName: contentGroup.lead.name },
+        ...(designGroup ? [{ groupId: designGroup.id, name: "Design", leadName: designGroup.lead.name }] : []),
+      ]
+    : [];
 
   const upsertBriefWithId = upsertMonthlyBrief.bind(null, projectId);
   const createEntryWithId = createCalendarEntry.bind(null, projectId);
+  const createUrgentWithId = createUrgentCalendarTask.bind(null, projectId);
 
   // Preserve the selected month/year when switching views.
   const viewHref = (v: "list" | "calendar") => `?view=${v}&month=${month}&year=${year}`;
@@ -108,6 +143,8 @@ export default async function ContentCalendarPage({
     title: t.name,
     contentType: t.contentType?.name ?? null,
     day: Number(t.publishDate!.toISOString().slice(8, 10)),
+    urgent: t.isUrgent,
+    team: t.group?.pod?.name ?? null,
   }));
 
   return (
@@ -178,23 +215,24 @@ export default async function ContentCalendarPage({
                       <th className="whitespace-nowrap px-4 py-3">Day</th>
                       <th className="whitespace-nowrap px-4 py-3">Topic/Title</th>
                       <th className="whitespace-nowrap px-4 py-3">Content Type</th>
+                      <th className="whitespace-nowrap px-4 py-3">Team</th>
                     </tr>
                   </thead>
                   <tbody>
                     {entries.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-4 py-6 text-center text-gs-gray">
+                        <td colSpan={5} className="px-4 py-6 text-center text-gs-gray">
                           No entries yet for {MONTH_NAMES[month - 1]} {year}.
                         </td>
                       </tr>
                     )}
                     {entries.map((t) => (
-                      <tr key={t.id} className="border-t border-gs-gray/10">
+                      <tr key={t.id} className={`border-t border-gs-gray/10 ${t.isUrgent ? "bg-gs-red/[0.04]" : ""}`}>
                         <td className="whitespace-nowrap px-4 py-3 text-gs-gray">
                           <EditEntryDate
                             publishDateIso={t.publishDate!.toISOString().slice(0, 10)}
                             contentLeadTimeDays={t.contentType?.contentLeadTimeDays ?? 0}
-                            editable={canManage && t.status !== "COMPLETED"}
+                            editable={canManage && t.status !== "COMPLETED" && !t.isUrgent}
                             action={updateCalendarEntryDate.bind(null, projectId, t.id)}
                           />
                         </td>
@@ -202,14 +240,27 @@ export default async function ContentCalendarPage({
                           {t.publishDate!.toLocaleDateString("en-US", { weekday: "short" })}
                         </td>
                         <td className="px-4 py-3">
-                          <EditEntryTitle
-                            title={t.name}
-                            taskHref={`/projects/${projectId}/tasks/${t.id}`}
-                            editable={t.status !== "COMPLETED"}
-                            action={updateCalendarEntryTitle.bind(null, projectId, t.id)}
-                          />
+                          <div className="flex flex-wrap items-center gap-2">
+                            {t.isUrgent && <UrgentTag />}
+                            <EditEntryTitle
+                              title={t.name}
+                              taskHref={`/projects/${projectId}/tasks/${t.id}`}
+                              editable={t.status !== "COMPLETED" && !t.isUrgent}
+                              action={updateCalendarEntryTitle.bind(null, projectId, t.id)}
+                            />
+                          </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{t.contentType?.name ?? "—"}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-gs-gray">
+                          {t.isUrgent ? (
+                            <>
+                              {t.group?.pod?.name ?? "—"}
+                              <span className="text-gs-gray/70"> · {t.assignedTo?.name ?? "Unassigned"}</span>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -217,6 +268,25 @@ export default async function ContentCalendarPage({
               </div>
             </div>
           </div>
+
+          {canUrgent && (
+            <div className="mt-6 rounded-lg border border-gs-red/30 bg-white p-4">
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase text-gs-red">
+                <UrgentIcon /> Add Urgent Task
+              </h2>
+              <p className="mt-1 text-xs text-gs-gray">
+                For work that can&apos;t wait. It goes to the teams you choose, shows on this calendar with an Urgent tag, and
+                the Social Media Lead can follow it.
+              </p>
+              <div className="mt-3">
+                <AddUrgentTaskForm
+                  teams={urgentTeams}
+                  contentTypes={contentTypes.map((ct) => ({ id: ct.id, name: ct.name }))}
+                  action={createUrgentWithId}
+                />
+              </div>
+            </div>
+          )}
 
           {canManage && (
             <div className="mt-6 rounded-lg border border-gs-gray/15 bg-white p-4">

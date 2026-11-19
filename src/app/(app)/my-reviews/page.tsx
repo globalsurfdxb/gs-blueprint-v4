@@ -15,6 +15,7 @@ import { ProjectCardHeader } from "@/components/project-card-header";
 import { KanbanBoard, TaskViews, type ViewTask } from "@/components/task-views";
 import { TaskDrawerProvider } from "@/components/task-drawer";
 import { BulkStatusProvider, RowSelect, SelectAll } from "./bulk-status";
+import { CalendarApproveAllButton, CalendarApproveButton, CalendarRevisionButton } from "./calendar-approve";
 
 // The lens the page is shown through. "action" is the original queue (submitted for review, or
 // unassigned); the rest are the filtered lists the Lead dashboard's cards open (QA F-02), plus a
@@ -76,6 +77,14 @@ export default async function MyReviewsPage({
   const baseWhere = {
     OR: [
       { group: { leadUserId: user.id } },
+      // The Social Media Lead also reviews the Content / Design teams' standard tasks on her projects (only those
+      // submitted for review; the rest of those teams' work is theirs to route).
+      {
+        status: "REVIEW" as const,
+        taskType: { not: "BUG" as const },
+        group: { pod: { name: { in: [CONTENT_POD_NAME, DESIGN_POD_NAME] } } },
+        project: { taskGroups: { some: { leadUserId: user.id, pod: { name: SOCIAL_MEDIA_POD_NAME } } } },
+      },
       {
         createdById: user.id,
         assignedToId: { not: user.id },
@@ -216,6 +225,7 @@ export default async function MyReviewsPage({
         status: "COMPLETED",
         publishDate: { not: null },
         contentTypeId: { not: null },
+        isUrgent: false, // urgent tasks don't go through the Content → Design approval chain
         group: { pod: { name: CONTENT_POD_NAME } },
       },
       include: taskInclude,
@@ -239,6 +249,7 @@ export default async function MyReviewsPage({
           publishDate: { not: null },
           contentTypeId: { not: null },
           calendarApprovedAt: null,
+          isUrgent: false,
           group: { pod: { name: DESIGN_POD_NAME } },
         },
         include: taskInclude,
@@ -508,42 +519,82 @@ Work submitted for your review, or still unassigned, across every project you le
       )}
 
       {calendarGroups.size > 0 && (
-        <div className="mt-6 flex flex-col gap-6">
-          <h2 className="text-sm font-semibold uppercase text-gs-gray">Content Calendar Approvals</h2>
+        <div className="mt-6 flex flex-col gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+            <div>
+              <h2 className="flex items-center gap-2 font-heading text-base font-semibold tracking-tight">
+                Content Calendar approvals
+                <span className="rounded-full bg-gs-red/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-gs-red">
+                  {calendarPending.length}
+                </span>
+              </h2>
+              <p className="mt-0.5 text-sm text-gs-gray">
+                Finished posts waiting for your sign-off: approve Content work to send it to Design, and give Design work its
+                final approval.
+              </p>
+            </div>
+          </div>
           {Array.from(calendarGroups.values()).map(({ project, tasks: projectTasks }) => (
-            <section key={project.id} className="overflow-hidden rounded-xl border border-gs-gray/10 bg-white shadow-sm">
-              <ProjectCardHeader projectId={project.id} name={project.name} client={project.client.name} count={projectTasks.length} />
-              <div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[520px] text-sm">
-                    <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
-                      <tr>
-                        <th className="whitespace-nowrap px-4 py-3">Task</th>
-                        <th className="whitespace-nowrap px-4 py-3">Assignee</th>
-                        <th className="whitespace-nowrap px-4 py-3">Due Date</th>
-                        <th className="whitespace-nowrap px-4 py-3">Needs</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {projectTasks.map((t) => (
-                        <TaskRow key={t.id} taskId={t.id} projectId={t.projectId} className="border-t border-gs-gray/10">
-                          <td className="px-4 py-3">
-                            <Link href={`/projects/${t.projectId}/tasks/${t.id}`} className="font-medium hover:underline">
-                              {t.name}
-                            </Link>
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{t.assignedTo?.name ?? "Unassigned"}</td>
-                          <td className="whitespace-nowrap px-4 py-3 text-gs-gray">{formatDate(t.dueDate)}</td>
-                          <td className="whitespace-nowrap px-4 py-3">
-                            <span className="font-medium text-gs-red">
-                              {t.calendarStage === "content" ? "Approve → Design" : "Approve Final Delivery"}
+            <section key={project.id} className="overflow-hidden rounded-2xl border border-gs-gray/10 bg-white shadow-sm">
+              <ProjectCardHeader projectId={project.id} name={project.name} client={project.client.name} count={projectTasks.length} unit="post">
+                <CalendarApproveAllButton items={projectTasks.map((t) => ({ taskId: t.id, stage: t.calendarStage }))} />
+              </ProjectCardHeader>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead className="border-b border-gs-gray/10 bg-gs-light/40 text-left text-[11px] font-semibold uppercase tracking-wider text-gs-gray/80">
+                    <tr>
+                      <th className="whitespace-nowrap px-4 py-3">Post</th>
+                      <th className="whitespace-nowrap px-4 py-3">Stage</th>
+                      <th className="whitespace-nowrap px-4 py-3">Assignee</th>
+                      <th className="whitespace-nowrap px-4 py-3">Due</th>
+                      <th className="px-4 py-3 text-right">
+                        <span className="sr-only">Approve</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectTasks.map((t) => (
+                      <TaskRow key={t.id} taskId={t.id} projectId={t.projectId} className="border-t border-gs-gray/10">
+                        <td className="px-4 py-3">
+                          <Link href={`/projects/${t.projectId}/tasks/${t.id}`} className="font-medium hover:text-gs-red hover:underline">
+                            {t.name}
+                          </Link>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                              t.calendarStage === "content" ? "bg-sky-50 text-sky-700" : "bg-violet-50 text-violet-700"
+                            }`}
+                          >
+                            {t.calendarStage === "content" ? "Content done → Design" : "Design done → Final"}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          {t.assignedTo ? (
+                            <span className="inline-flex items-center gap-2 text-gs-black/80">
+                              <span
+                                aria-hidden
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-gs-light text-[11px] font-semibold text-gs-gray"
+                              >
+                                {t.assignedTo.name.charAt(0).toUpperCase()}
+                              </span>
+                              {t.assignedTo.name}
                             </span>
-                          </td>
-                        </TaskRow>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          ) : (
+                            <span className="text-gs-gray">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 tabular-nums text-gs-gray">{formatDate(t.dueDate)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right">
+                          <span className="inline-flex items-center gap-2">
+                            <CalendarRevisionButton taskId={t.id} name={t.name} />
+                            <CalendarApproveButton taskId={t.id} stage={t.calendarStage} name={t.name} />
+                          </span>
+                        </td>
+                      </TaskRow>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </section>
           ))}

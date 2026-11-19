@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import { daysOverdue, getLocalDateString, addDays } from "@/lib/timezone";
 import type { Prisma } from "@/generated/prisma/client";
-import { hasPersonalTaskList, hidesCompletedProjects, isLead } from "@/lib/permissions";
+import { hasPersonalTaskList, hidesCompletedProjects, isLead, seesTeamTasks, SOCIAL_MEDIA_POD_NAME, CONTENT_POD_NAME, DESIGN_POD_NAME } from "@/lib/permissions";
 import { statusLabel } from "@/lib/bug";
 import { KanbanBoard, TaskViews, type ViewTask } from "@/components/task-views";
 import { TaskDrawerProvider, TaskOpener } from "@/components/task-drawer";
@@ -84,7 +84,18 @@ export default async function MyTasksPage({
     // Leads/Contributors don't see work under a Completed project.
     ...(hidesCompletedProjects(user) ? { status: { not: "COMPLETED" } } : {}),
   };
-  const [mineAndCreated, teamAdded] = await Promise.all([
+  // A Cluster Head's Tasks page also lists everything their team is working on: the Task Groups of their cluster (or the
+  // pods they are restricted to), plus Content Calendar tasks on projects those groups belong to (the calendar's task
+  // sits in the Content group, but it is the Social Media team's work).
+  const teamGroupWhere: Prisma.TaskGroupWhereInput[] = seesTeamTasks(user)
+    ? user.roles
+        .filter((r) => r.role === "CLUSTER_HEAD" && r.clusterId)
+        .map((r) => ({
+          clusterId: r.clusterId!,
+          ...(r.restrictedPodIds.length > 0 ? { podId: { in: r.restrictedPodIds } } : {}),
+        }))
+    : [];
+  const [mineAndCreated, teamAdded, clusterTeam, calendarMine] = await Promise.all([
     prisma.task.findMany({
       where: {
         taskType: "STANDARD",
@@ -111,13 +122,61 @@ export default async function MyTasksPage({
           orderBy: { dueDate: "asc" },
         })
       : Promise.resolve([]),
+    teamGroupWhere.length > 0
+      ? prisma.task.findMany({
+          where: {
+            taskType: "STANDARD",
+            parentTaskId: null,
+            AND: [
+              {
+                OR: [
+                  { group: { OR: teamGroupWhere } },
+                  {
+                    publishDate: { not: null },
+                    contentTypeId: { not: null },
+                    project: { taskGroups: { some: { OR: teamGroupWhere } } },
+                  },
+                  { isUrgent: true, project: { taskGroups: { some: { OR: teamGroupWhere } } } },
+                ],
+              },
+              openOrRecentlyDone,
+            ],
+            project: projectFilter,
+          },
+          include: taskInclude,
+          orderBy: { dueDate: "asc" },
+        })
+      : Promise.resolve([]),
+    // A Social Media Lead's posts sit in the Content/Design groups (someone else's), but they are the work she plans,
+    // reviews and signs off, so every Content / Design task on her projects is listed with hers — including the ones
+    // waiting for her review or approval.
+    isLead(user) && !user.restrictToOwnTasks
+      ? prisma.task.findMany({
+          where: {
+            taskType: "STANDARD",
+            parentTaskId: null,
+            group: { pod: { name: { in: [CONTENT_POD_NAME, DESIGN_POD_NAME] } } },
+            project: { ...projectFilter, taskGroups: { some: { leadUserId: meId, pod: { name: SOCIAL_MEDIA_POD_NAME } } } },
+            AND: [openOrRecentlyDone],
+          },
+          include: taskInclude,
+          orderBy: { dueDate: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
-  // Self-added only (the member created it for themselves), merged in without duplicates, still due-date ordered.
+  // A Lead's team: tasks members added for themselves, plus anything in their groups waiting for the Lead's review.
+  // Merged in without duplicates, still due-date ordered. A Cluster Head's whole team is merged in too (the
+  // "assignee" filter then narrows it to one person).
   const knownIds = new Set(mineAndCreated.map((t) => t.id));
-  const allTasks = [
-    ...mineAndCreated,
-    ...teamAdded.filter((t) => t.createdById === t.assignedToId && !knownIds.has(t.id)),
-  ].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+  const teamExtra = teamAdded.filter(
+    (t) => (t.createdById === t.assignedToId || t.status === "REVIEW") && !knownIds.has(t.id),
+  );
+  for (const t of teamExtra) knownIds.add(t.id);
+  const calendarExtra = calendarMine.filter((t) => !knownIds.has(t.id));
+  for (const t of calendarExtra) knownIds.add(t.id);
+  const allTasks = [...mineAndCreated, ...teamExtra, ...calendarExtra, ...clusterTeam.filter((t) => !knownIds.has(t.id))].sort(
+    (a, b) => a.dueDate.getTime() - b.dueDate.getTime(),
+  );
 
   // Sprint filter (PRD 8.14) — cross-project, shown only when the user has any Sprint-enabled
   // work. Options: Active Sprint, Backlog (Sprint-enabled but unsprinted), or a specific past
@@ -296,7 +355,9 @@ export default async function MyTasksPage({
   for (const t of openTasks) bucketed.get(bucketOf(t))!.push(t); // already sorted by dueDate asc
 
   // Count cards: all open work in the chosen sprint, independent of the filter bar.
-  const scopeOpen = sprintScoped.filter((t) => t.status !== "COMPLETED" && t.assignedToId === meId);
+  // The cards count exactly the open tasks the list shows (mine, ones I assigned, and for a Lead / Cluster Head their
+  // team's), so a card's number always equals the rows it opens.
+  const scopeOpen = sprintScoped.filter((t) => t.status !== "COMPLETED");
   const scopeOverdue = scopeOpen.filter((t) => bucketOf(t) === "overdue").length;
   const scopeToday = scopeOpen.filter((t) => bucketOf(t) === "today").length;
 
@@ -534,7 +595,7 @@ export default async function MyTasksPage({
   return (
     <TaskDrawerProvider>
     <div>
-      <PageHeader title="My Tasks" actions={<NewTaskButton />} />
+      <PageHeader title={seesTeamTasks(user) ? "Tasks" : "My Tasks"} actions={<NewTaskButton />} />
 
       {/* The count cards describe all your open work (within the chosen sprint), so they stay put
           while the filters below narrow the lists. */}

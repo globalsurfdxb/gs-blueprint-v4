@@ -33,6 +33,8 @@ export function computeStatusOptions(args: {
   task: Task;
   group: GroupForVerdict;
   hasLoggedTime: boolean;
+  /** True when this person may review the task for another reason (e.g. the project's Social Media Lead). */
+  extraReviewer?: boolean;
 }): StatusOption[] {
   const { user, task, group, hasLoggedTime } = args;
   const label = (s: string) => statusLabel(s, task.taskType);
@@ -40,7 +42,7 @@ export function computeStatusOptions(args: {
   const isAssignee = user.id === task.assignedToId;
   const canAdvance = canAdvanceTask(user, task);
   const verdictGroup = group ? { ...group, bugTrackingEnabled: group.pod?.bugTrackingEnabled } : null;
-  const canVerdict = canRecordBugVerdict(user, verdictGroup, task);
+  const canVerdict = canRecordBugVerdict(user, verdictGroup, task) || args.extraReviewer === true;
 
   const options: StatusOption[] = [{ value: task.status, label: label(task.status) }];
 
@@ -76,9 +78,10 @@ export function explainBlockedMove(args: {
   group: GroupForVerdict;
   target: string;
   hasLoggedTime: boolean;
+  extraReviewer?: boolean;
 }): string {
   const { user, task, group, target, hasLoggedTime } = args;
-  const options = computeStatusOptions({ user, task, group, hasLoggedTime });
+  const options = computeStatusOptions({ user, task, group, hasLoggedTime, extraReviewer: args.extraReviewer });
   const match = options.find((o) => o.value === target && o.value !== task.status);
   if (match?.disabled) return match.hint ?? "That status change isn't available yet.";
 

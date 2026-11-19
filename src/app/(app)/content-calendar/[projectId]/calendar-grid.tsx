@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UrgentIcon } from "./urgent-tag";
 
 export type CalendarEntry = {
   id: string;
@@ -6,6 +7,9 @@ export type CalendarEntry = {
   title: string;
   contentType: string | null;
   day: number;
+  /** Raised as an urgent task: drawn as a solid red chip with a bolt and "Urgent · <team>". */
+  urgent?: boolean;
+  team?: string | null;
 };
 
 // Monday-start week, matching the reference layout. Short single-letter forms are used on
@@ -71,10 +75,17 @@ export function CalendarGrid({
                       <Link
                         key={e.id}
                         href={`/projects/${e.projectId}/tasks/${e.id}`}
-                        title={e.title}
-                        className="block truncate rounded bg-gs-red/10 px-1 py-0.5 text-[10px] font-medium text-gs-red hover:bg-gs-red/20 sm:px-1.5 sm:text-xs"
+                        title={e.urgent ? `Urgent${e.team ? ` · ${e.team}` : ""}: ${e.title}` : e.title}
+                        className={
+                          e.urgent
+                            ? "flex items-center gap-1 truncate rounded bg-gs-red px-1 py-0.5 text-[10px] font-semibold text-white shadow-sm hover:bg-gs-red/90 sm:px-1.5 sm:text-xs"
+                            : "block truncate rounded bg-gs-red/10 px-1 py-0.5 text-[10px] font-medium text-gs-red hover:bg-gs-red/20 sm:px-1.5 sm:text-xs"
+                        }
                       >
-                        {e.contentType ?? "Post"}
+                        {e.urgent && <UrgentIcon className="h-3 w-3 shrink-0" />}
+                        <span className="truncate">
+                          {e.urgent ? `Urgent${e.team ? ` · ${e.team}` : ""}` : (e.contentType ?? "Post")}
+                        </span>
                       </Link>
                     ))}
                   </div>

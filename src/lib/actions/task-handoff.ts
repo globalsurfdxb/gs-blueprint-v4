@@ -273,8 +273,59 @@ export async function approveCalendarHandoffToDesign(taskId: string, _formData: 
     },
   );
 
+  revalidatePath("/my-reviews");
   revalidatePath(`/projects/${task.projectId}`);
   revalidatePath(`/projects/${task.projectId}/tasks/${task.id}`);
+  });
+}
+
+/**
+ * Sends a finished Content Calendar post back for revision instead of approving it — the other half of the Social Media
+ * Lead's sign-off. Works at both checkpoints (Content → Design and Design → final delivery) with the same authority as the
+ * approvals: the project's Social Media Lead or Admin. The task goes back to In Progress, its revision count goes up, and
+ * the assignee and group Lead are told (with the optional note, which is also saved as a comment on the task).
+ */
+export async function requestCalendarRevision(taskId: string, formData: FormData) {
+  return runAction(async () => {
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Not signed in.");
+
+    const task = await prisma.task.findUnique({ where: { id: taskId }, include: { group: { include: { pod: true } } } });
+    if (!task) throw new Error("Task not found.");
+    if (task.status !== "COMPLETED") throw new Error("Only a Completed task can be sent back for revision.");
+    if (task.publishDate === null || task.contentTypeId === null) {
+      throw new Error("This task didn't originate from the Content Calendar.");
+    }
+    if (!(await canApproveCalendarHandoff(user, task.projectId))) {
+      throw new Error("Only this project's Social Media Lead (or Admin) can send a calendar post back for revision.");
+    }
+    const isDesign = task.group?.pod?.name === DESIGN_POD_NAME;
+    if (isDesign && task.calendarApprovedAt) throw new Error("This post already received final approval.");
+    if (!isDesign && (await prisma.task.findFirst({ where: { predecessorTaskId: taskId } }))) {
+      throw new Error("This post has already been sent to Design.");
+    }
+
+    const note = String(formData.get("note") ?? "").trim();
+
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { status: "IN_PROGRESS", completedAt: null, revisionCount: { increment: 1 } },
+    });
+    if (note) {
+      await prisma.comment.create({ data: { taskId, authorId: user.id, text: `Revision requested: ${note}` } });
+    }
+
+    await notifyUsers([task.assignedToId, task.group?.leadUserId].filter((id) => id !== user.id), {
+      type: "MOVED_TO_REVISION",
+      message: `"${task.name}" was sent back for revision by ${user.name}${note ? `: ${note}` : "."}`,
+      relatedTaskId: task.id,
+      relatedProjectId: task.projectId,
+    });
+
+    revalidatePath("/my-reviews");
+    revalidatePath("/");
+    revalidatePath(`/projects/${task.projectId}`);
+    revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
   });
 }
 
@@ -323,6 +374,7 @@ export async function approveCalendarFinalDelivery(taskId: string, _formData: Fo
     },
   );
 
+  revalidatePath("/my-reviews");
   revalidatePath(`/projects/${task.projectId}/tasks/${taskId}`);
   });
 }

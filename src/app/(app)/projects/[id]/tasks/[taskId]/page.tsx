@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { CalendarRevisionButton } from "@/app/(app)/my-reviews/calendar-approve";
 import { getCurrentUser } from "@/lib/auth";
 import {
   canViewTask,
@@ -8,6 +9,7 @@ import {
   canReviewGroupTask,
   canRejectAndReturn,
   canRecordBugVerdict,
+  isSocialMediaProjectReviewer,
   canToggleHoldTask,
   canLogTime,
   canEditTimeLog,
@@ -207,7 +209,8 @@ export default async function TaskDetailPage({
 
   // A Content Calendar task's path forward is the dedicated Sneha/Admin approval below,
   // not the generic Share action — the Content group's own Lead has no way to send it on.
-  const isCalendarTask = task.publishDate !== null && task.contentTypeId !== null;
+  // (An urgent task raised from the calendar is a stand-alone task: no Content → Design approval chain.)
+  const isCalendarTask = task.publishDate !== null && task.contentTypeId !== null && !task.isUrgent;
   const isDesignStageTask = group?.pod?.name === DESIGN_POD_NAME;
   const canSendToNextGroup =
     task.status === "COMPLETED" && !successorTask && canReviewGroupTask(user, group) && !isCalendarTask;
@@ -451,11 +454,13 @@ export default async function TaskDetailPage({
         status={task.status}
         taskType={task.taskType}
         canAdvance={canAdvanceTask(user, task)}
-        canReview={canRecordBugVerdict(
-          user,
-          group ? { leadUserId: group.leadUserId, podId: group.podId, clusterId: group.clusterId, bugTrackingEnabled: group.pod?.bugTrackingEnabled } : null,
-          task,
-        )}
+        canReview={
+          canRecordBugVerdict(
+            user,
+            group ? { leadUserId: group.leadUserId, podId: group.podId, clusterId: group.clusterId, bugTrackingEnabled: group.pod?.bugTrackingEnabled } : null,
+            task,
+          ) || (await isSocialMediaProjectReviewer(user, group, task))
+        }
         canHold={canToggleHoldTask(user, group)}
         actions={statusActionProps}
       />
@@ -703,6 +708,13 @@ export default async function TaskDetailPage({
             Closes out this Content Calendar entry — the last step after Design has completed the work.
           </p>
         </ActionForm>
+      )}
+
+      {(canApproveDesignHandoff || canGiveFinalCalendarApproval) && (
+        <div className="mt-3 flex items-center gap-3">
+          <CalendarRevisionButton taskId={task.id} name={task.name} />
+          <span className="text-xs text-gs-gray">Not right yet? Send it back to the team with a note.</span>
+        </div>
       )}
 
       {task.calendarApprovedAt && task.calendarApprovedBy && (

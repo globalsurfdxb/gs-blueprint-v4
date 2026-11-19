@@ -527,6 +527,8 @@ model Task {
   assignedToId      String?       @map("assigned_to_id")
   assignedTo        User?         @relation("TaskAssignee", fields: [assignedToId], references: [id])
   priority          TaskPriority  @default(MEDIUM)
+  // Raised as an urgent task from the Content Calendar (Social Media Cluster Head) — tagged "Urgent" there.
+  isUrgent          Boolean       @default(false) @map("is_urgent")
   dueDate           DateTime      @map("due_date")
   status            TaskStatus    @default(NEW)
   onHoldFromStatus  TaskStatus?   @map("on_hold_from_status")

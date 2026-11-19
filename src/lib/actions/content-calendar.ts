@@ -4,7 +4,14 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { canManageContentCalendar, canViewContentCalendar, SOCIAL_MEDIA_POD_NAME, CONTENT_POD_NAME } from "@/lib/permissions";
+import {
+  canCreateUrgentCalendarTask,
+  canManageContentCalendar,
+  canViewContentCalendar,
+  SOCIAL_MEDIA_POD_NAME,
+  CONTENT_POD_NAME,
+  DESIGN_POD_NAME,
+} from "@/lib/permissions";
 import { subtractWorkingDays, formatDate } from "@/lib/format";
 import { notifyUsers } from "@/lib/notifications";
 import { getLocalDateString } from "@/lib/timezone";
@@ -14,6 +21,7 @@ const calendarEntrySchema = z.object({
   publishDate: z.string().min(1, "Publish Date is required."),
   title: z.string().min(1, "Topic/Title is required."),
   contentTypeId: z.string().min(1, "Content Type is required."),
+  description: z.string().optional(),
 });
 
 /**
@@ -50,6 +58,7 @@ export async function createCalendarEntry(projectId: string, formData: FormData)
     publishDate: formData.get("publishDate"),
     title: formData.get("title"),
     contentTypeId: formData.get("contentTypeId"),
+    description: String(formData.get("description") ?? "").trim() || undefined,
   });
   if (!parsed.success) {
     throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
@@ -83,6 +92,7 @@ export async function createCalendarEntry(projectId: string, formData: FormData)
       projectId,
       groupId: contentGroup.id,
       name: parsed.data.title,
+      description: parsed.data.description ?? null,
       dueDate,
       publishDate,
       contentTypeId: contentType.id,
@@ -103,6 +113,116 @@ export async function createCalendarEntry(projectId: string, formData: FormData)
   revalidatePath(`/content-calendar/${projectId}`);
   revalidatePath(`/projects/${projectId}`);
   return task;
+  });
+}
+
+const urgentTaskSchema = z.object({
+  title: z.string().trim().min(1, "Topic/Title is required."),
+  publishDate: z.string().min(1, "Date is required."),
+  dueDate: z.string().optional(),
+  contentTypeId: z.string().optional(),
+  description: z.string().optional(),
+});
+
+/**
+ * An urgent task raised from the Content Calendar by the overseeing Social Media Cluster Head (or Admin). Unlike a
+ * regular entry it skips the Content Type lead-time rule and can go to several teams at once: one task per chosen
+ * team (Content and/or Design), assigned straight to that team's Lead (never a contributor; the Lead routes it from
+ * there). Every task is flagged urgent, so the Content Calendar tags it, and the project's Social Media Lead is told
+ * so she can follow it.
+ */
+export async function createUrgentCalendarTask(projectId: string, formData: FormData) {
+  return runAction(async () => {
+    const user = await getCurrentUser();
+    if (!user) throw new Error("Not signed in.");
+
+    const socialMediaGroup = await prisma.taskGroup.findFirst({
+      where: { projectId, pod: { name: SOCIAL_MEDIA_POD_NAME } },
+    });
+    if (!canCreateUrgentCalendarTask(user, socialMediaGroup)) {
+      throw new Error("Only the Social Media Cluster Head (or Admin) can add urgent tasks.");
+    }
+
+    const parsed = urgentTaskSchema.safeParse({
+      title: formData.get("title"),
+      publishDate: formData.get("publishDate"),
+      dueDate: String(formData.get("dueDate") ?? "") || undefined,
+      contentTypeId: String(formData.get("contentTypeId") ?? "") || undefined,
+      description: String(formData.get("description") ?? "").trim() || undefined,
+    });
+    if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
+
+    const groupIds = Array.from(new Set(formData.getAll("groupId").map(String).filter(Boolean)));
+    if (groupIds.length === 0) throw new Error("Choose at least one team (Content or Design).");
+
+    const groups = await prisma.taskGroup.findMany({
+      where: { id: { in: groupIds }, projectId, pod: { name: { in: [CONTENT_POD_NAME, DESIGN_POD_NAME] } } },
+      include: { pod: { select: { name: true } } },
+    });
+    if (groups.length !== groupIds.length) throw new Error("One of the chosen teams isn't attached to this project.");
+
+    const publishDate = new Date(parsed.data.publishDate);
+    const dueDate = new Date(parsed.data.dueDate ?? parsed.data.publishDate);
+    if (Number.isNaN(publishDate.getTime()) || Number.isNaN(dueDate.getTime())) throw new Error("Enter valid dates.");
+    const todayStr = getLocalDateString(user.location, new Date());
+    if (dueDate.toISOString().slice(0, 10) < todayStr) throw new Error("The due date can't be in the past.");
+
+    if (parsed.data.contentTypeId) {
+      const ct = await prisma.contentType.findUnique({ where: { id: parsed.data.contentTypeId }, select: { id: true } });
+      if (!ct) throw new Error("Content Type not found.");
+    }
+
+    // Urgent work goes straight to each team's Lead (never to a contributor): the Lead decides who picks it up.
+    const monthlyBrief = await prisma.monthlyBrief.findUnique({
+      where: {
+        projectId_month_year: { projectId, month: publishDate.getUTCMonth() + 1, year: publishDate.getUTCFullYear() },
+      },
+    });
+
+    const created = await prisma.$transaction(
+      groups.map((g) =>
+        prisma.task.create({
+          data: {
+            projectId,
+            groupId: g.id,
+            name: parsed.data.title,
+            description: parsed.data.description ?? null,
+            dueDate,
+            publishDate,
+            contentTypeId: parsed.data.contentTypeId ?? null,
+            monthlyBriefId: monthlyBrief?.id ?? null,
+            priority: "URGENT",
+            isUrgent: true,
+            createdById: user.id,
+            assignedToId: g.leadUserId,
+          },
+        }),
+      ),
+    );
+
+    // Each team Lead hears about their task straight away.
+    for (const [i, task] of created.entries()) {
+      const g = groups[i];
+      await notifyUsers([g.leadUserId].filter((id) => id !== user.id), {
+        type: "TASK_ASSIGNED",
+        message: `Urgent task "${task.name}" was assigned to you for your ${g.pod?.name ?? "team"} team by ${user.name} — due ${formatDate(task.dueDate)}.`,
+        relatedTaskId: task.id,
+        relatedProjectId: projectId,
+      });
+    }
+    // ...and the project's Social Media Lead can follow it.
+    await notifyUsers([socialMediaGroup!.leadUserId].filter((id) => id !== user.id), {
+      type: "TASK_ASSIGNED",
+      message: `${user.name} raised an urgent task "${parsed.data.title}" for ${groups.map((g) => g.pod?.name).join(" + ")}.`,
+      relatedTaskId: created[0].id,
+      relatedProjectId: projectId,
+    });
+
+    revalidatePath(`/content-calendar/${projectId}`);
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath("/my-tasks");
+    revalidatePath("/");
+    return created[0];
   });
 }
 

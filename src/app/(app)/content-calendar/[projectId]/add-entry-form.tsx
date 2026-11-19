@@ -105,6 +105,16 @@ export function AddEntryForm({
           className="field"
         />
       </div>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="description" className="text-sm font-medium">Description</label>
+        <textarea
+          id="description"
+          name="description"
+          rows={4}
+          placeholder="Brief for the team: what the post should say, links or references."
+          className="field min-h-24 resize-y"
+        />
+      </div>
       <SubmitButton
         pendingLabel="Adding…"
         className="btn btn-primary self-start"

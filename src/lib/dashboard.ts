@@ -107,9 +107,23 @@ export async function getDashboardData(user: CurrentUser): Promise<DashboardData
     : { clusterId: chClusterId, ...(restriction ? { podId: { in: restriction } } : {}) };
 
   // Archived projects (and their tasks) drop out of every dashboard widget.
+  // A Content Calendar entry's task lives in the Content group (another cluster), but it is the Social Media team's
+  // work, so a Cluster Head also counts calendar tasks on projects where their own cluster/pod has a group.
   const taskScope: Prisma.TaskWhereInput = admin
     ? { project: { archivedAt: null } }
-    : { group: taskGroupWhere!, project: { archivedAt: null } };
+    : {
+        OR: [
+          { group: taskGroupWhere! },
+          {
+            publishDate: { not: null },
+            contentTypeId: { not: null },
+            project: { taskGroups: { some: taskGroupWhere! } },
+          },
+          // Urgent tasks raised from the Content Calendar, in whichever team's group they landed.
+          { isUrgent: true, project: { taskGroups: { some: taskGroupWhere! } } },
+        ],
+        project: { archivedAt: null },
+      };
   const projectScope: Prisma.ProjectWhereInput = {
     archivedAt: null,
     ...(admin

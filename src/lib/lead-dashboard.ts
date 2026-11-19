@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import type { CurrentUser } from "@/lib/auth";
 import { daysOverdue } from "@/lib/timezone";
+import { SOCIAL_MEDIA_POD_NAME } from "@/lib/permissions";
 import type { DashTask } from "@/lib/dashboard";
 
 // The Lead's own operational view (a lean counterpart to the Admin/Cluster Head oversight
@@ -57,15 +58,35 @@ export async function getLeadDashboardData(user: CurrentUser): Promise<LeadDashb
 
   // Top-level, still-open tasks across all the Lead's groups. Subtasks are excluded — they're
   // a private breakdown for one person (PRD 8.2), not group deliverables to track here.
+  // A Social Media Lead's Content Calendar entries are tasks in the Content group (someone else's), but they are her
+  // work to track, so they roll up here too.
+  const calendarProjectIds = groups.length
+    ? (
+        await prisma.taskGroup.findMany({
+          where: { leadUserId: user.id, pod: { name: SOCIAL_MEDIA_POD_NAME } },
+          select: { projectId: true },
+        })
+      ).map((g) => g.projectId)
+    : [];
+
   const tasks = await prisma.task.findMany({
     // Completed projects are hidden from a Lead's day-to-day view.
     where: {
-      groupId: { in: groupIds },
+      AND: [
+        {
+          OR: [
+            { groupId: { in: groupIds } },
+            { projectId: { in: calendarProjectIds }, publishDate: { not: null }, contentTypeId: { not: null } },
+            // Urgent tasks raised for her projects' Content / Design teams (these may carry no Content Type).
+            { projectId: { in: calendarProjectIds }, isUrgent: true },
+          ],
+        },
+        // A Lead an Admin has restricted to their own tasks only rolls up their own work.
+        user.restrictToOwnTasks ? { OR: [{ assignedToId: user.id }, { createdById: user.id }] } : {},
+      ],
       parentTaskId: null,
       status: { not: "COMPLETED" },
       project: { status: { not: "COMPLETED" } },
-      // A Lead an Admin has restricted to their own tasks only rolls up their own work.
-      ...(user.restrictToOwnTasks ? { OR: [{ assignedToId: user.id }, { createdById: user.id }] } : {}),
     },
     include: { assignedTo: { select: { id: true, name: true, location: true } }, project: { select: { name: true, client: { select: { name: true } } } } },
     orderBy: { dueDate: "asc" },
