@@ -114,7 +114,8 @@ async function loadTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
       },
       sprint: { select: { id: true } },
       comments: { include: { author: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
-      predecessorTask: { select: { id: true } },
+      // The previous stage's links (e.g. the references Sneha added on the Content task) are part of this task's brief.
+      predecessorTask: { select: { id: true, attachments: { select: { id: true, url: true, label: true }, orderBy: { createdAt: "asc" } } } },
       successorTask: { select: { id: true } },
     },
   });
@@ -200,7 +201,13 @@ async function loadTaskDrawerData(taskId: string): Promise<TaskDrawerData> {
     bugSprintName: task.bugSprint?.name ?? null,
     page: task.page,
     bugImages: task.bugImages,
-    links: task.attachments,
+    links: [
+      ...task.attachments,
+      ...(task.predecessorTask?.attachments ?? []).map((l) => ({
+        ...l,
+        label: l.label ? `${l.label} (previous stage)` : "Link from previous stage",
+      })),
+    ],
     subtasks: task.subtasks.map((s) => ({
       id: s.id,
       name: s.name,

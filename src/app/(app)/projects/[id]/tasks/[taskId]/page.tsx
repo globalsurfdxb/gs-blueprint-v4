@@ -162,7 +162,15 @@ export default async function TaskDetailPage({
     task.predecessorTaskId
       ? prisma.task.findUnique({
           where: { id: task.predecessorTaskId },
-          select: { id: true, name: true, description: true, completedAt: true, group: { select: { name: true } } },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            completedAt: true,
+            group: { select: { name: true } },
+            // The links the previous stage added (e.g. Sneha's references on the Content task) are this task's brief too.
+            attachments: { select: { id: true, url: true, label: true, addedBy: { select: { name: true } } }, orderBy: { createdAt: "asc" } },
+          },
         })
       : Promise.resolve(null),
     prisma.task.findFirst({
@@ -327,6 +335,28 @@ export default async function TaskDetailPage({
           </p>
           <p className="font-medium">{predecessorTask.name}</p>
           {predecessorTask.description && <p className="mt-1 text-gs-gray">{predecessorTask.description}</p>}
+          {predecessorTask.attachments.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs uppercase text-gs-gray">
+                Links from {predecessorTask.group?.name ?? "the previous stage"} · {predecessorTask.attachments.length}
+              </p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {predecessorTask.attachments.map((l) => (
+                  <li key={l.id} className="min-w-0 truncate">
+                    <a
+                      href={l.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-gs-red hover:underline"
+                    >
+                      {l.label || l.url}
+                    </a>
+                    <span className="text-xs text-gs-gray"> · added by {l.addedBy.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {predecessorTask.completedAt && (
             <p className="mt-1 text-xs text-gs-gray">
               Completed {formatDate(predecessorTask.completedAt)}

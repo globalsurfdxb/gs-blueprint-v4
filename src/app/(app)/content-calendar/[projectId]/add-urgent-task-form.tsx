@@ -75,7 +75,7 @@ export function AddUrgentTaskForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <label htmlFor="urgent-publish" className="text-sm font-medium">
-            Calendar date <span className="text-gs-red">*</span>
+            Publish date <span className="text-gs-red">*</span>
           </label>
           <DateInput
             id="urgent-publish"
@@ -88,11 +88,6 @@ export function AddUrgentTaskForm({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="urgent-due" className="text-sm font-medium">Due date</label>
-          <DateInput id="urgent-due" name="dueDate" min={todayString()} className="field" />
-        </div>
-        <p className="col-span-2 -mt-1 text-xs text-gs-gray">Due date: leave empty to use the calendar date.</p>
-        <div className="col-span-2 flex flex-col gap-1.5">
           <label htmlFor="urgent-type" className="text-sm font-medium">Content Type</label>
           <Select id="urgent-type" name="contentTypeId" defaultValue="" className="field">
             <option value="">None</option>

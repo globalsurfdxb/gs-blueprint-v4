@@ -118,8 +118,7 @@ export async function createCalendarEntry(projectId: string, formData: FormData)
 
 const urgentTaskSchema = z.object({
   title: z.string().trim().min(1, "Topic/Title is required."),
-  publishDate: z.string().min(1, "Date is required."),
-  dueDate: z.string().optional(),
+  publishDate: z.string().min(1, "Publish Date is required."),
   contentTypeId: z.string().optional(),
   description: z.string().optional(),
 });
@@ -146,7 +145,6 @@ export async function createUrgentCalendarTask(projectId: string, formData: Form
     const parsed = urgentTaskSchema.safeParse({
       title: formData.get("title"),
       publishDate: formData.get("publishDate"),
-      dueDate: String(formData.get("dueDate") ?? "") || undefined,
       contentTypeId: String(formData.get("contentTypeId") ?? "") || undefined,
       description: String(formData.get("description") ?? "").trim() || undefined,
     });
@@ -162,10 +160,11 @@ export async function createUrgentCalendarTask(projectId: string, formData: Form
     if (groups.length !== groupIds.length) throw new Error("One of the chosen teams isn't attached to this project.");
 
     const publishDate = new Date(parsed.data.publishDate);
-    const dueDate = new Date(parsed.data.dueDate ?? parsed.data.publishDate);
-    if (Number.isNaN(publishDate.getTime()) || Number.isNaN(dueDate.getTime())) throw new Error("Enter valid dates.");
+    // One date: an urgent task is due on the day it is published.
+    const dueDate = publishDate;
+    if (Number.isNaN(publishDate.getTime())) throw new Error("Enter a valid Publish Date.");
     const todayStr = getLocalDateString(user.location, new Date());
-    if (dueDate.toISOString().slice(0, 10) < todayStr) throw new Error("The due date can't be in the past.");
+    if (publishDate.toISOString().slice(0, 10) < todayStr) throw new Error("The Publish Date can't be in the past.");
 
     if (parsed.data.contentTypeId) {
       const ct = await prisma.contentType.findUnique({ where: { id: parsed.data.contentTypeId }, select: { id: true } });
